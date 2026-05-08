@@ -1,16 +1,12 @@
 use crate::app::{tray, widget};
-use crate::data::repositories::widget_state;
-use crate::data::sqlite_pool::wait_for_sqlite_pool;
 use crate::domain::widget::{WidgetPlacement, WidgetSide};
+use crate::engine::widget as widget_engine;
 use crate::platform::windows::input;
 use tauri::AppHandle;
 
 #[tauri::command]
 pub async fn cmd_get_widget_placement(app: AppHandle) -> Result<WidgetPlacement, String> {
-    let pool = wait_for_sqlite_pool(&app).await?;
-    widget_state::load_widget_placement(&pool)
-        .await
-        .map_err(|error| format!("failed to load widget placement: {error}"))
+    widget_engine::load_widget_placement(&app).await
 }
 
 #[tauri::command]
@@ -19,10 +15,7 @@ pub async fn cmd_set_widget_placement(
     anchor_y: f64,
     app: AppHandle,
 ) -> Result<(), String> {
-    let pool = wait_for_sqlite_pool(&app).await?;
-    widget_state::save_widget_placement(&pool, WidgetPlacement::new(side, anchor_y))
-        .await
-        .map_err(|error| format!("failed to save widget placement: {error}"))
+    widget_engine::save_widget_placement(&app, WidgetPlacement::new(side, anchor_y)).await
 }
 
 #[tauri::command]

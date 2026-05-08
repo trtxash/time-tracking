@@ -2,8 +2,7 @@ use sqlx::{Pool, Sqlite};
 
 const APP_OVERRIDE_KEY_PREFIX: &str = "__app_override::";
 const CATEGORY_COLOR_OVERRIDE_KEY_PREFIX: &str = "__category_color_override::";
-const CATEGORY_DEFAULT_COLOR_ASSIGNMENT_KEY_PREFIX: &str =
-    "__category_default_color_assignment::";
+const CATEGORY_DEFAULT_COLOR_ASSIGNMENT_KEY_PREFIX: &str = "__category_default_color_assignment::";
 const CUSTOM_CATEGORY_KEY_PREFIX: &str = "__custom_category::";
 const DELETED_CATEGORY_KEY_PREFIX: &str = "__deleted_category::";
 const MAX_SETTING_KEY_LEN: usize = 256;
@@ -49,9 +48,9 @@ pub async fn commit_classification_setting_mutations(
         }
     }
 
-    tx.commit()
-        .await
-        .map_err(|error| format!("failed to commit classification settings transaction: {error}"))?;
+    tx.commit().await.map_err(|error| {
+        format!("failed to commit classification settings transaction: {error}")
+    })?;
 
     Ok(())
 }
@@ -76,7 +75,10 @@ fn validate_classification_setting_mutation(
 
         if mutation.key.starts_with(APP_OVERRIDE_KEY_PREFIX) {
             serde_json::from_str::<serde_json::Value>(value).map_err(|error| {
-                format!("invalid app override value for key `{}`: {error}", mutation.key)
+                format!(
+                    "invalid app override value for key `{}`: {error}",
+                    mutation.key
+                )
             })?;
         }
     }

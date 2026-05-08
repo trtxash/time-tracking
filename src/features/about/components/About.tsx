@@ -4,7 +4,7 @@ import { UI_TEXT } from "../../../shared/copy/uiText.ts";
 import type { QuietToastTone } from "../../../shared/components/QuietToast";
 import QuietPageHeader from "../../../shared/components/QuietPageHeader";
 import type { UpdateSnapshot } from "../../../shared/types/update";
-import SettingsAboutPanel from "../../settings/components/SettingsAboutPanel";
+import AboutPanel from "./AboutPanel";
 import { loadSettingsPageBootstrap } from "../../settings/services/settingsBootstrapService.ts";
 import { SettingsRuntimeAdapterService } from "../../settings/services/settingsRuntimeAdapterService";
 
@@ -110,7 +110,7 @@ export default function About({
       />
 
       <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
-        <SettingsAboutPanel
+        <AboutPanel
           appVersion={appVersion}
           effectiveUpdateSnapshot={effectiveUpdateSnapshot}
           updateChecking={updateChecking}

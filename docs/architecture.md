@@ -184,7 +184,9 @@ Raw DTO 只能停留在明确边界：
 src/
   app/
   features/
+    about/
     classification/
+    data/
     dashboard/
     history/
     settings/
@@ -220,19 +222,23 @@ src/
 
 `features/*` 负责产品能力闭环。
 
-每个 feature 优先拥有自己的：
+每个 feature 可以按真实需要拥有自己的局部目录或类型文件：
 
 - `components/`
 - `hooks/`
 - `services/`
 - `types.ts`
 
+这些不是必须配齐的固定四件套。只有当该 feature 确实有对应 UI、状态编排、服务逻辑或共享类型时才创建；像 `about` 这类轻量页面只保留 `components/` 是合理的。
+
 页面型 feature 当前包括：
 
 - `dashboard`
 - `history`
+- `data`
 - `classification`
 - `settings`
+- `about`
 
 支持型 feature 当前包括：
 
@@ -579,10 +585,12 @@ Rust 侧允许为了稳定演进保留少量入口协调或兼容封装，但规
 
 当前仓库里，前端关键路径变更的默认最小验证可参考：
 
-- `npm test`
-- `npm run test:replay`
-- `npm run test:update`
-- `npm run build`
+- `npm run check`
+- `npm run check:frontend`
+
+结构性改动、Rust 边界改动或发布前复核默认继续使用：
+
+- `npm run check:full`
 
 如果某次结构性改动无法通过这些最小验证之一，应优先解释风险或补验证，而不是直接跳过。
 

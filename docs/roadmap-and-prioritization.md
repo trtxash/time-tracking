@@ -96,8 +96,10 @@
 
 - `Dashboard` 的可读性
 - `History` 的回看效率
+- `Data` 的长期活动理解效率
 - `Classification` 的管理清晰度
 - `Settings` 的行为透明度
+- `About` 的版本、更新与反馈入口清晰度
 - Quiet Pro 一致性
 
 ## 5.4 主题四：关键路径上的结构收口
@@ -210,7 +212,7 @@
 
 ## 8.3 主路径严重回归
 
-- `Dashboard / History / Classification / Settings` 的核心主路径被明显破坏
+- `Dashboard / History / Data / Classification / Settings / About` 的核心主路径被明显破坏
 - Windows 桌面行为与当前承诺不一致
 - 构建、启动、基础使用或发布流程出现阻塞
 

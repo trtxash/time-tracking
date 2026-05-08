@@ -507,7 +507,7 @@ fn is_lifecycle_utility_process(lower_name: &str) -> bool {
                     | "maintenance"
                     | "maintenancetool"
             )
-    })
+        })
 }
 
 fn is_temporary_executable_process(lower_name: &str) -> bool {

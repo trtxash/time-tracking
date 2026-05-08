@@ -138,7 +138,7 @@ If you are contributing or reviewing the project direction, start with:
 
 - [`docs/product-principles-and-scope.md`](docs/product-principles-and-scope.md)
 - [`docs/roadmap-and-prioritization.md`](docs/roadmap-and-prioritization.md)
-- [`docs/engineering-quality-target.md`](docs/engineering-quality-target.md)
+- [`docs/engineering-quality.md`](docs/engineering-quality.md)
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/quiet-pro-component-guidelines.md`](docs/quiet-pro-component-guidelines.md)
 - [`docs/versioning-and-release-policy.md`](docs/versioning-and-release-policy.md)

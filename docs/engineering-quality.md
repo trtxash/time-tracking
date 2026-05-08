@@ -107,15 +107,21 @@
 它串行执行：
 
 - `npm run check:naming`
+- `npm run check:architecture`
 - `npm test`
 - `npm run test:replay`
 - `npm run test:update`
 - `npm run test:settings`
 - `npm run test:widget`
 - `npm run test:classification`
+- `npm run test:data`
 - `npm run test:persistence`
 - `npm run test:interaction`
+- `npm run test:release`
+- `npm run test:startup`
+- `npm run test:ui-smoke`
 - `npm run build`
+- `npm run check:bundle`
 
 默认完整质量门槛是：
 
@@ -134,6 +140,12 @@
 当前仓库默认 CI gate 与 release workflow 的质量校验入口统一为 `npm run check:full`。
 
 `check:naming` 是前端边界的轻量命名防线。它默认扫描 `src/app/**`、`src/features/**`、`src/shared/types/**` 与 `src/shared/lib/**`，阻止 tracking / update IPC、backup preview、widget placement、settings persistence 与 SQLite read row 的常见 raw 字段重新扩散到业务层。Raw DTO、协议字段与数据库字段应继续留在 `src/platform/**`、`src-tauri/**` 或明确的 read model 内部边界。
+
+`check:architecture` 是前端 owner 边界的轻量结构防线。它默认阻止 `src/features/*/components/**` 与 `src/features/*/hooks/**` 直接绕过 feature-owned service 访问 persistence、Tauri API 或 `invoke`。
+
+`test:ui-smoke` 是当前仓库的最小 UI smoke 防线。它不依赖真实 Tauri runtime，而是通过 stub Tauri API、SSR 渲染 AppShell，并确认主导航和 Dashboard 首屏可以被构建与渲染。
+
+`check:bundle` 是保守 bundle 预算防线。它在生产构建之后检查关键 JS chunk 与总 gzip 体积，防止静默引入明显超预算依赖。
 
 性能优化的额外规则：
 

@@ -1,11 +1,7 @@
 use crate::app::desktop_behavior;
 use crate::app::state::DesktopBehaviorState;
-use crate::data::repositories::classification_settings::{
-    commit_classification_setting_mutations, ClassificationSettingMutation,
-};
-use crate::data::sqlite_pool::{
-    is_recoverable_sqlite_error, reopen_sqlite_pool, wait_for_sqlite_pool,
-};
+use crate::data::classification_service::commit_classification_setting_mutations_with_recovery;
+use crate::data::repositories::classification_settings::ClassificationSettingMutation;
 use tauri::{AppHandle, State};
 
 #[derive(Clone, Debug, serde::Deserialize)]
@@ -65,13 +61,5 @@ pub async fn cmd_commit_classification_settings(
         .map(ClassificationSettingMutation::from)
         .collect::<Vec<_>>();
 
-    let pool = wait_for_sqlite_pool(&app).await?;
-    match commit_classification_setting_mutations(&pool, &mutations).await {
-        Ok(()) => Ok(()),
-        Err(error) if is_recoverable_sqlite_error(&error) => {
-            let reopened_pool = reopen_sqlite_pool(&app).await?;
-            commit_classification_setting_mutations(&reopened_pool, &mutations).await
-        }
-        Err(error) => Err(error),
-    }
+    commit_classification_setting_mutations_with_recovery(&app, &mutations).await
 }

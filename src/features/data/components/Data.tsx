@@ -3,10 +3,14 @@ import { BarChart3, ChevronLeft, ChevronRight, Clock3 } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import { UI_TEXT } from "../../../shared/copy/uiText.ts";
 import {
-  getEarliestSessionStartTime,
-  getSessionsInRange,
+  buildActivityHeatmap,
+  buildYearOptions,
+  getCachedDataHeatmapSessions,
+  getCachedEarliestSessionStartTime,
+  type HeatmapSelection,
+  loadDataHeatmapSnapshot,
   type HistorySession,
-} from "../../../platform/persistence/sessionReadRepository.ts";
+} from "../services/dataReadModel.ts";
 import QuietChartTooltip from "../../../shared/components/QuietChartTooltip";
 import QuietPageHeader from "../../../shared/components/QuietPageHeader";
 import QuietTooltip from "../../../shared/components/QuietTooltip";
@@ -31,160 +35,8 @@ interface Props {
   mappingVersion?: number;
 }
 
-interface HeatmapCell {
-  key: string;
-  date: string;
-  duration: number;
-  intensity: number;
-  isFuture: boolean;
-  isOutsideYear: boolean;
-  label: string;
-}
-
-interface HeatmapWeek {
-  key: string;
-  monthLabel: string;
-  cells: HeatmapCell[];
-}
-
-type HeatmapSelection = "recent" | number;
-
 const HEATMAP_WEEKDAYS = ["一", "", "三", "", "五", "", "日"] as const;
-const RECENT_HEATMAP_WEEK_COUNT = 53;
 const HEATMAP_LOADING_HEIGHT = 104;
-const heatmapSessionCache = new Map<string, HistorySession[]>();
-let earliestSessionStartTimeCache: number | null | undefined;
-
-function startOfLocalDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function addDays(date: Date, delta: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + delta);
-  return next;
-}
-
-function toDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatHeatmapDateLabel(dateKey: string) {
-  const date = new Date(`${dateKey}T00:00:00`);
-  return date.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" });
-}
-
-function formatHeatmapMonthLabel(date: Date) {
-  return `${date.getMonth() + 1}月`;
-}
-
-function buildYearOptions(earliestStartTime: number | null, currentYear: number) {
-  const earliestYear = earliestStartTime ? new Date(earliestStartTime).getFullYear() : currentYear;
-  const firstYear = Math.min(earliestYear, currentYear);
-  return Array.from(
-    { length: currentYear - firstYear + 1 },
-    (_, index) => currentYear - index,
-  );
-}
-
-function getHeatmapRange(selection: HeatmapSelection, nowMs: number) {
-  if (selection === "recent") {
-    const todayStart = startOfLocalDay(new Date(nowMs));
-    const mondayOffset = (todayStart.getDay() + 6) % 7;
-    const currentWeekStart = addDays(todayStart, -mondayOffset);
-    return {
-      start: addDays(currentWeekStart, -(RECENT_HEATMAP_WEEK_COUNT - 1) * 7),
-      end: addDays(currentWeekStart, 7),
-      weekCount: RECENT_HEATMAP_WEEK_COUNT,
-    };
-  }
-
-  const yearStart = new Date(selection, 0, 1);
-  const nextYearStart = new Date(selection + 1, 0, 1);
-  const mondayOffset = (yearStart.getDay() + 6) % 7;
-  const heatmapStart = addDays(yearStart, -mondayOffset);
-  const lastYearDay = addDays(nextYearStart, -1);
-  const lastWeekEndOffset = 6 - ((lastYearDay.getDay() + 6) % 7);
-  const heatmapEnd = addDays(lastYearDay, lastWeekEndOffset + 1);
-
-  return {
-    start: heatmapStart,
-    end: heatmapEnd,
-    weekCount: Math.ceil((heatmapEnd.getTime() - heatmapStart.getTime()) / (7 * 24 * 60 * 60 * 1000)),
-  };
-}
-
-function getHeatmapSelectionKey(selection: HeatmapSelection, nowMs: number) {
-  const range = getHeatmapRange(selection, nowMs);
-  return `${selection}:${toDateKey(range.start)}:${toDateKey(range.end)}`;
-}
-
-function buildActivityHeatmap(
-  sessions: HistorySession[],
-  selection: HeatmapSelection,
-  nowMs: number,
-): HeatmapWeek[] {
-  const { start: heatmapStart, weekCount } = getHeatmapRange(selection, nowMs);
-  const todayStart = startOfLocalDay(new Date(nowMs));
-  const dayBuckets = new Map<string, number>();
-
-  for (let dayIndex = 0; dayIndex < weekCount * 7; dayIndex += 1) {
-    dayBuckets.set(toDateKey(addDays(heatmapStart, dayIndex)), 0);
-  }
-
-  for (const session of sessions) {
-    const sessionStart = session.startTime;
-    const sessionEnd = session.endTime ?? nowMs;
-    if (sessionEnd <= sessionStart) continue;
-
-    let cursor = startOfLocalDay(new Date(sessionStart));
-    while (cursor.getTime() < sessionEnd) {
-      const dayStart = cursor.getTime();
-      const dayEnd = dayStart + 24 * 60 * 60 * 1000;
-      const clippedStart = Math.max(sessionStart, dayStart);
-      const clippedEnd = Math.min(sessionEnd, dayEnd);
-      const key = toDateKey(cursor);
-      const previous = dayBuckets.get(key);
-
-      if (previous !== undefined && clippedEnd > clippedStart) {
-        dayBuckets.set(key, previous + clippedEnd - clippedStart);
-      }
-
-      cursor = addDays(cursor, 1);
-    }
-  }
-
-  const maxDuration = Math.max(1, ...Array.from(dayBuckets.values()));
-
-  return Array.from({ length: weekCount }, (_, weekIndex) => {
-    const weekStart = addDays(heatmapStart, weekIndex * 7);
-    const monthStartInWeek = Array.from({ length: 7 }, (_, weekdayIndex) => addDays(weekStart, weekdayIndex))
-      .find((date) => (selection === "recent" || date.getFullYear() === selection) && date.getDate() === 1);
-    return {
-      key: toDateKey(weekStart),
-      monthLabel: monthStartInWeek ? formatHeatmapMonthLabel(monthStartInWeek) : "",
-      cells: Array.from({ length: 7 }, (_, weekdayIndex) => {
-        const date = addDays(weekStart, weekdayIndex);
-        const dateKey = toDateKey(date);
-        const duration = dayBuckets.get(dateKey) ?? 0;
-        const isFuture = date.getTime() > todayStart.getTime();
-        const isOutsideYear = selection !== "recent" && date.getFullYear() !== selection;
-        return {
-          key: dateKey,
-          date: dateKey,
-          duration,
-          isFuture,
-          isOutsideYear,
-          intensity: duration <= 0 || isFuture || isOutsideYear ? 0 : Math.max(0.16, duration / maxDuration),
-          label: `${formatHeatmapDateLabel(dateKey)} · ${isFuture ? "未开始" : formatDuration(duration)}`,
-        };
-      }),
-    };
-  });
-}
 
 export default function Data({
   refreshKey = 0,
@@ -195,22 +47,24 @@ export default function Data({
   const today = new Date();
   const currentYear = today.getFullYear();
   const cachedSnapshot = getHistorySnapshotCache(today);
-  const initialHeatmapCacheKey = getHeatmapSelectionKey("recent", Date.now());
+  const initialCachedHeatmapSessions = getCachedDataHeatmapSessions("recent", Date.now());
   const [rawSnapshot, setRawSnapshot] = useState<HistorySnapshot | null>(cachedSnapshot);
   const [selectedHeatmapView, setSelectedHeatmapView] = useState<HeatmapSelection>("recent");
-  const [earliestStartTime, setEarliestStartTime] = useState<number | null>(earliestSessionStartTimeCache ?? null);
-  const [yearSessions, setYearSessions] = useState<HistorySession[]>(
-    () => heatmapSessionCache.get(initialHeatmapCacheKey) ?? [],
+  const [earliestStartTime, setEarliestStartTime] = useState<number | null>(
+    getCachedEarliestSessionStartTime() ?? null,
   );
-  const [heatmapLoading, setHeatmapLoading] = useState(!heatmapSessionCache.has(initialHeatmapCacheKey));
-  const [hasFetchedHeatmapOnce, setHasFetchedHeatmapOnce] = useState(heatmapSessionCache.has(initialHeatmapCacheKey));
+  const [yearSessions, setYearSessions] = useState<HistorySession[]>(
+    () => initialCachedHeatmapSessions ?? [],
+  );
+  const [heatmapLoading, setHeatmapLoading] = useState(!initialCachedHeatmapSessions);
+  const [hasFetchedHeatmapOnce, setHasFetchedHeatmapOnce] = useState(Boolean(initialCachedHeatmapSessions));
   const [nowMs, setNowMs] = useState(() => cachedSnapshot?.fetchedAtMs ?? Date.now());
   const [loading, setLoading] = useState(!cachedSnapshot);
   const [hasFetchedOverviewOnce, setHasFetchedOverviewOnce] = useState(Boolean(cachedSnapshot));
   const hasLoadedRef = useRef(Boolean(cachedSnapshot));
   const initialRefreshKeyRef = useRef(refreshKey);
   const hasFetchedOverviewOnceRef = useRef(Boolean(cachedSnapshot));
-  const hasFetchedHeatmapOnceRef = useRef(heatmapSessionCache.has(initialHeatmapCacheKey));
+  const hasFetchedHeatmapOnceRef = useRef(Boolean(initialCachedHeatmapSessions));
 
   useEffect(() => {
     let cancelled = false;
@@ -260,9 +114,7 @@ export default function Data({
     let cancelled = false;
     const loadYear = async () => {
       const nowForRange = Date.now();
-      const range = getHeatmapRange(selectedHeatmapView, nowForRange);
-      const cacheKey = getHeatmapSelectionKey(selectedHeatmapView, nowForRange);
-      const cachedSessions = heatmapSessionCache.get(cacheKey);
+      const cachedSessions = getCachedDataHeatmapSessions(selectedHeatmapView, nowForRange);
 
       if (cachedSessions) {
         setYearSessions(cachedSessions);
@@ -274,23 +126,16 @@ export default function Data({
       }
 
       try {
-        const [earliest, sessions] = await Promise.all([
-          earliestSessionStartTimeCache === undefined
-            ? getEarliestSessionStartTime()
-            : Promise.resolve(earliestSessionStartTimeCache),
-          getSessionsInRange(range.start.getTime(), range.end.getTime()),
-        ]);
+        const snapshot = await loadDataHeatmapSnapshot(selectedHeatmapView, nowForRange);
         if (cancelled) return;
 
-        earliestSessionStartTimeCache = earliest;
-        heatmapSessionCache.set(cacheKey, sessions);
-        setEarliestStartTime(earliest);
-        setYearSessions(sessions);
+        setEarliestStartTime(snapshot.earliestStartTime);
+        setYearSessions(snapshot.sessions);
         hasFetchedHeatmapOnceRef.current = true;
         setHasFetchedHeatmapOnce(true);
 
-        if (earliest) {
-          const earliestYear = new Date(earliest).getFullYear();
+        if (snapshot.earliestStartTime) {
+          const earliestYear = new Date(snapshot.earliestStartTime).getFullYear();
           if (selectedHeatmapView !== "recent" && selectedHeatmapView < earliestYear) {
             setSelectedHeatmapView(earliestYear);
           }

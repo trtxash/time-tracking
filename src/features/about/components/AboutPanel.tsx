@@ -3,7 +3,7 @@ import QuietSubpanel from "../../../shared/components/QuietSubpanel";
 import type { UpdateSnapshot } from "../../../shared/types/update";
 import UpdateStatusPanel from "../../update/components/UpdateStatusPanel";
 
-type SettingsAboutPanelProps = {
+type AboutPanelProps = {
   appVersion: string;
   effectiveUpdateSnapshot: UpdateSnapshot;
   updateChecking: boolean;
@@ -17,7 +17,7 @@ type SettingsAboutPanelProps = {
   onOpenFeedback: () => void;
 };
 
-export default function SettingsAboutPanel({
+export default function AboutPanel({
   appVersion,
   effectiveUpdateSnapshot,
   updateChecking,
@@ -29,7 +29,7 @@ export default function SettingsAboutPanel({
   onOpenUpdateDownload,
   onOpenReleaseNotes,
   onOpenFeedback,
-}: SettingsAboutPanelProps) {
+}: AboutPanelProps) {
   return (
     <section className="qp-panel p-5 md:p-6">
       <div className="flex items-center gap-2.5 pb-2 border-b border-[var(--qp-border-subtle)] mb-5">

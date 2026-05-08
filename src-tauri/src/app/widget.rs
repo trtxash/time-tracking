@@ -1,7 +1,6 @@
 use crate::app::state::WidgetWindowLifecycleState;
-use crate::data::repositories::widget_state;
-use crate::data::sqlite_pool::wait_for_sqlite_pool;
 use crate::domain::widget::{WidgetPlacement, WidgetSide};
+use crate::engine::widget as widget_engine;
 use tauri::{
     AppHandle, Emitter, Manager, Monitor, PhysicalPosition, PhysicalSize, Position, Runtime, Size,
     WebviewUrl, WebviewWindow, WebviewWindowBuilder,
@@ -30,10 +29,7 @@ pub(crate) async fn show_widget_window<R: Runtime>(
     app: &AppHandle<R>,
     preferred_monitor: Option<Monitor>,
 ) -> Result<(), String> {
-    let pool = wait_for_sqlite_pool(app).await?;
-    let placement = widget_state::load_widget_placement(&pool)
-        .await
-        .map_err(|error| format!("failed to load widget placement: {error}"))?;
+    let placement = widget_engine::load_widget_placement(app).await?;
     apply_widget_layout_internal(app, preferred_monitor, placement, false, false, false).await
 }
 
@@ -48,10 +44,7 @@ pub(crate) async fn apply_widget_layout<R: Runtime>(
         return Ok(());
     }
 
-    let pool = wait_for_sqlite_pool(app).await?;
-    widget_state::save_widget_placement(&pool, placement)
-        .await
-        .map_err(|error| format!("failed to save widget placement: {error}"))?;
+    widget_engine::save_widget_placement(app, placement).await?;
     apply_widget_layout_internal(app, None, placement, expanded, expanded, show_object_slot).await
 }
 
@@ -60,10 +53,7 @@ pub(crate) async fn set_widget_window_expanded<R: Runtime>(
     expanded: bool,
     show_object_slot: bool,
 ) -> Result<(), String> {
-    let pool = wait_for_sqlite_pool(app).await?;
-    let placement = widget_state::load_widget_placement(&pool)
-        .await
-        .map_err(|error| format!("failed to load widget placement: {error}"))?;
+    let placement = widget_engine::load_widget_placement(app).await?;
     apply_widget_layout_internal(app, None, placement, expanded, expanded, show_object_slot).await
 }
 

@@ -67,8 +67,12 @@ fn resolve_tauri_app_config_db_path<R: Runtime>(app: &AppHandle<R>) -> Result<Pa
         .path()
         .app_config_dir()
         .map_err(|error| format!("failed to resolve app config dir: {error}"))?;
-    create_dir_all(&app_path)
-        .map_err(|error| format!("failed to create app config dir `{}`: {error}", app_path.display()))?;
+    create_dir_all(&app_path).map_err(|error| {
+        format!(
+            "failed to create app config dir `{}`: {error}",
+            app_path.display()
+        )
+    })?;
     app_path.push(SQLITE_DB_FILE_NAME);
     Ok(app_path)
 }
@@ -106,9 +110,10 @@ pub async fn reopen_sqlite_pool<R: Runtime>(app: &AppHandle<R>) -> Result<Pool<S
 
     let previous_pool = {
         let mut instances = instances.0.write().await;
-        match instances
-            .insert(SQLITE_DB_NAME.to_string(), DbPool::Sqlite(next_pool.clone()))
-        {
+        match instances.insert(
+            SQLITE_DB_NAME.to_string(),
+            DbPool::Sqlite(next_pool.clone()),
+        ) {
             Some(DbPool::Sqlite(pool)) => Some(pool),
             _ => None,
         }

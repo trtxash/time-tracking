@@ -31,6 +31,7 @@ export interface DashboardSnapshot {
   fetchedAtMs: number;
   icons: Record<string, string>;
   sessions: HistorySession[];
+  yesterdaySessions?: HistorySession[];
 }
 
 export interface IconSnapshot {
@@ -42,6 +43,8 @@ export interface DashboardReadModel {
   compiledSessions: CompiledSession[];
   stats: AppStat[];
   totalTrackedTime: number;
+  yesterdayTrackedTime: number;
+  dayDeltaTrackedTime: number;
   topApplications: TopApplicationItem[];
   hourlyActivity: HourlyActivityPoint[];
   categoryDist: CategoryDistItem[];
@@ -49,8 +52,11 @@ export interface DashboardReadModel {
 }
 
 export async function loadDashboardSnapshot(date: Date = new Date()): Promise<DashboardSnapshot> {
-  const [sessions, icons] = await Promise.all([
+  const yesterday = new Date(date);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const [sessions, yesterdaySessions, icons] = await Promise.all([
     getHistoryByDate(date),
+    getHistoryByDate(yesterday),
     getIconMap(),
   ]);
 
@@ -58,6 +64,7 @@ export async function loadDashboardSnapshot(date: Date = new Date()): Promise<Da
     fetchedAtMs: Date.now(),
     icons,
     sessions,
+    yesterdaySessions,
   };
 }
 
@@ -74,11 +81,19 @@ export function buildDashboardReadModel(
   sessions: HistorySession[],
   trackerHealth: TrackerHealthSnapshot,
   nowMs: number,
+  yesterdaySessions: HistorySession[] = [],
 ): DashboardReadModel {
   const dayRange = getDayRange(new Date(nowMs), nowMs);
+  const yesterday = new Date(nowMs);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayRange = getDayRange(yesterday);
   const liveSessions = materializeLiveSessions(sessions, trackerHealth, nowMs);
   const compiledSessions = compileForRange(liveSessions, dayRange, 0);
+  const compiledYesterdaySessions = compileForRange(yesterdaySessions, yesterdayRange, 0);
   const stats = buildNormalizedAppStats(compiledSessions);
+  const yesterdayStats = buildNormalizedAppStats(compiledYesterdaySessions);
+  const totalTrackedTime = getTotalTrackedTime(stats);
+  const yesterdayTrackedTime = getTotalTrackedTime(yesterdayStats);
   const diagnostics = buildReadModelDiagnostics(
     compiledSessions,
     trackerHealth,
@@ -88,7 +103,9 @@ export function buildDashboardReadModel(
   return {
     compiledSessions,
     stats,
-    totalTrackedTime: getTotalTrackedTime(stats),
+    totalTrackedTime,
+    yesterdayTrackedTime,
+    dayDeltaTrackedTime: totalTrackedTime - yesterdayTrackedTime,
     topApplications: buildTopApplications(stats),
     hourlyActivity: buildHourlyActivity(compiledSessions),
     categoryDist: buildCategoryDistribution(stats),

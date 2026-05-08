@@ -1,6 +1,39 @@
 import type { HistorySession } from "../../../shared/lib/sessionReadRepository.ts";
+import {
+  buildDailySummaries,
+  getRollingDayRanges,
+  type SessionRange,
+} from "../../../shared/lib/sessionReadCompiler.ts";
 
 export type { HistorySession };
+
+export type DataTrendRange = 7 | 30 | 365;
+
+export interface DataTrendPoint {
+  label: string;
+  hours: number;
+}
+
+export interface DataTrendMetricLabels {
+  total: string;
+  average: string;
+  averageHint: string;
+}
+
+export interface DataTrendViewModel {
+  title: string;
+  rangeLabel: string;
+  rangeDays: number;
+  totalDuration: number;
+  averageDuration: number;
+  averageDivisor: number;
+  chartData: DataTrendPoint[];
+  chartAxis: {
+    domainMax: number;
+    ticks: number[];
+  };
+  metricLabels: DataTrendMetricLabels;
+}
 
 export interface HeatmapCell {
   key: string;
@@ -41,6 +74,11 @@ export interface DataHeatmapDependencies {
 const RECENT_HEATMAP_WEEK_COUNT = 53;
 const heatmapSessionCache = new Map<string, HistorySession[]>();
 let earliestSessionStartTimeCache: number | null | undefined;
+const DATA_TREND_RANGE_LABELS: Record<DataTrendRange, string> = {
+  7: "近 7 天",
+  30: "近 30 天",
+  365: "近一年",
+};
 
 function startOfLocalDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -79,6 +117,82 @@ function formatDuration(durationMs: number) {
 
 function formatHeatmapMonthLabel(date: Date) {
   return `${date.getMonth() + 1}月`;
+}
+
+function buildChartAxis(points: DataTrendPoint[]) {
+  const maxHours = Math.max(0, ...points.map((point) => point.hours));
+  const intervalCount = 3;
+  const rawStep = Math.max(1, maxHours / intervalCount);
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+  const normalizedStep = rawStep / magnitude;
+  const niceMultiplier = [1, 2, 3, 4, 6, 8, 10].find((multiplier) => normalizedStep <= multiplier) ?? 10;
+  const axisStep = Math.max(1, niceMultiplier * magnitude);
+  const domainMax = Math.max(axisStep * intervalCount, Math.ceil(maxHours / axisStep) * axisStep);
+
+  return {
+    domainMax,
+    ticks: Array.from({ length: 4 }, (_, index) => (domainMax / intervalCount) * index),
+  };
+}
+
+function formatMonthLabel(monthKey: string) {
+  const month = Number(monthKey.slice(5, 7));
+  return `${month}月`;
+}
+
+function getRecentMonthRanges(nowMs: number, monthCount: number): SessionRange[] {
+  const now = new Date(nowMs);
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  return Array.from({ length: monthCount }, (_, index) => {
+    const monthStart = new Date(currentMonthStart);
+    monthStart.setMonth(currentMonthStart.getMonth() - (monthCount - 1 - index));
+    const monthEnd = new Date(monthStart);
+    monthEnd.setMonth(monthStart.getMonth() + 1);
+
+    return {
+      startMs: monthStart.getTime(),
+      endMs: Math.min(monthEnd.getTime(), nowMs),
+    };
+  });
+}
+
+export function getDataTrendRangeLabel(range: DataTrendRange) {
+  return DATA_TREND_RANGE_LABELS[range];
+}
+
+export function buildDataTrendViewModel(
+  sessions: HistorySession[],
+  range: DataTrendRange,
+  nowMs: number,
+): DataTrendViewModel {
+  const dayRanges = getRollingDayRanges(range, nowMs);
+  const shouldGroupByMonth = range === 365;
+  const summaryRanges = shouldGroupByMonth ? getRecentMonthRanges(nowMs, 12) : dayRanges;
+  const summaries = buildDailySummaries(sessions, summaryRanges, 0);
+  const totalDuration = summaries.reduce((sum, item) => sum + item.totalDuration, 0);
+  const averageDivisor = Math.max(1, shouldGroupByMonth ? summaries.length : dayRanges.length);
+  const chartData = summaries.map((item) => ({
+    label: shouldGroupByMonth ? formatMonthLabel(item.date.slice(0, 7)) : item.date.slice(5),
+    hours: Math.max(0, item.totalDuration) / 3600000,
+  }));
+  const rangeLabel = getDataTrendRangeLabel(range);
+
+  return {
+    title: rangeLabel,
+    rangeLabel,
+    rangeDays: range,
+    totalDuration,
+    averageDuration: Math.round(totalDuration / averageDivisor),
+    averageDivisor,
+    chartData,
+    chartAxis: buildChartAxis(chartData),
+    metricLabels: {
+      total: range === 7 ? "7 日总时长" : range === 30 ? "30 日总时长" : "近一年总时长",
+      average: shouldGroupByMonth ? "月均时长" : "日均时长",
+      averageHint: shouldGroupByMonth ? "按近一年月份计算" : `按${rangeLabel}计算`,
+    },
+  };
 }
 
 async function resolveDefaultDataHeatmapDependencies(): Promise<DataHeatmapDependencies> {

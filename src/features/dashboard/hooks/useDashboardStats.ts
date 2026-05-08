@@ -26,6 +26,9 @@ export function useDashboardStats(
   const [rawSessions, setRawSessions] = useState<HistorySession[]>(
     () => initialSnapshot?.sessions ?? [],
   );
+  const [rawYesterdaySessions, setRawYesterdaySessions] = useState<HistorySession[]>(
+    () => initialSnapshot?.yesterdaySessions ?? [],
+  );
   const [icons, setIcons] = useState<Record<string, string>>(
     () => initialSnapshot?.icons ?? {},
   );
@@ -39,6 +42,7 @@ export function useDashboardStats(
 
       startTransition(() => {
         setRawSessions(snapshot.sessions);
+        setRawYesterdaySessions(snapshot.yesterdaySessions ?? []);
         setIcons(snapshot.icons);
         setNowMs(snapshot.fetchedAtMs);
       });
@@ -90,8 +94,9 @@ export function useDashboardStats(
       classificationReady ? rawSessions : [],
       trackerHealth,
       nowMs,
+      classificationReady ? rawYesterdaySessions : [],
     ),
-    [classificationReady, mappingVersion, nowMs, rawSessions, trackerHealth],
+    [classificationReady, mappingVersion, nowMs, rawSessions, rawYesterdaySessions, trackerHealth],
   );
 
   return {

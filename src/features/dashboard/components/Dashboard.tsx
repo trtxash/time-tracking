@@ -1,6 +1,6 @@
 ﻿import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { Monitor, BarChart3 } from "lucide-react";
+import { Monitor, BarChart3, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, BarChart, Bar, XAxis, YAxis } from "recharts";
 import { UI_TEXT } from "../../../shared/copy/uiText.ts";
 import { useIconThemeColors } from "../../../shared/hooks/useIconThemeColors";
@@ -53,10 +53,25 @@ export default function Dashboard({
   const iconThemeColors = useIconThemeColors(icons);
   const {
     totalTrackedTime,
+    dayDeltaTrackedTime,
     topApplications,
     hourlyActivity,
     categoryDist,
   } = dashboard;
+  const dayDeltaDirection = dayDeltaTrackedTime > 0
+    ? "increase"
+    : dayDeltaTrackedTime < 0
+      ? "decrease"
+      : "same";
+  const dayDeltaLabel = UI_TEXT.dashboard.comparedWithYesterday(
+    formatDashboardDuration(Math.abs(dayDeltaTrackedTime)),
+    dayDeltaDirection,
+  );
+  const DayDeltaIcon = dayDeltaDirection === "increase"
+    ? TrendingUp
+    : dayDeltaDirection === "decrease"
+      ? TrendingDown
+      : Minus;
   const runtimeStateLabel = trackingPaused
     ? UI_TEXT.dashboard.paused
     : isAfk
@@ -181,6 +196,10 @@ export default function Dashboard({
                 )}
               </div>
             </div>
+            <p className="dashboard-focus-delta text-[11px] font-medium text-[var(--qp-text-tertiary)]">
+              <DayDeltaIcon size={12} strokeWidth={2} />
+              {dayDeltaLabel}
+            </p>
           </div>
 
           <div className="qp-panel p-5 flex min-h-0 flex-col overflow-hidden dashboard-pulse-card">

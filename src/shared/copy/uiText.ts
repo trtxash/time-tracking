@@ -26,6 +26,10 @@ export const UI_TEXT = {
     paused: "已暂停",
     focusShare: "专注分布",
     total: "总计",
+    comparedWithYesterday: (deltaLabel: string, direction: "increase" | "decrease" | "same") => {
+      if (direction === "same") return "与昨天持平";
+      return `比昨天${direction === "increase" ? "增加" : "减少"} ${deltaLabel}`;
+    },
     hourlyActivity: "今日能量脉冲",
     activeMinutes: "活跃",
     topApps: "应用排行",
@@ -50,6 +54,10 @@ export const UI_TEXT = {
     title: "数据",
     subtitle: "查看跨日趋势与长期变化",
     pastSevenDays: "近 7 天",
+    activityTrend: "活跃趋势",
+    weeklyTotal: "7 日总时长",
+    dailyAverage: "日均时长",
+    dailyAverageHint: "按近 7 天计算",
     activityHeatmap: "活跃热力图",
     activityHeatmapHint: "每日活跃强度",
     recentYear: "近一年",

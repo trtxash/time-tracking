@@ -579,18 +579,19 @@ button {
 }
 
 .data-trend-chart {
-  height: 180px;
+  height: 168px;
 }
 
 @media (min-width: 1536px) and (min-height: 900px) {
   .data-trend-chart {
-    height: 230px;
+    height: 214px;
   }
 }
 
 .data-metric-stack {
   display: grid;
-  align-content: start;
+  align-content: stretch;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: 16px;
   min-width: 0;
 }
@@ -804,7 +805,7 @@ button {
   }
 
   .data-trend-chart {
-    height: 150px;
+    height: 140px;
   }
 
   .data-metric-card {
@@ -2081,6 +2082,15 @@ body[data-window-label="widget"] {
   height: 0.375rem;
   flex: 0 0 auto;
   border-radius: 999px;
+}
+
+.dashboard-focus-delta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  margin-top: 0.65rem;
+  text-align: right;
 }
 
 @container (min-width: 440px) {

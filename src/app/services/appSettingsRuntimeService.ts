@@ -4,11 +4,21 @@ import {
   saveAppSetting,
   type AppSettings,
 } from "../../platform/persistence/appSettingsStore.ts";
+import {
+  onAppSettingsChanged,
+  type AppSettingsChangedPayload,
+} from "../../platform/runtime/appSettingsEventGateway.ts";
 
 export type { AppSettings };
 
 export async function loadCurrentAppSettings(): Promise<AppSettings> {
   return loadAppSettings();
+}
+
+export async function subscribeAppSettingsChanged(
+  handler: (payload: AppSettingsChangedPayload) => void | Promise<void>,
+): Promise<() => void> {
+  return onAppSettingsChanged(handler);
 }
 
 export async function loadLatestTrackingPauseSetting(): Promise<boolean> {

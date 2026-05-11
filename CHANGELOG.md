@@ -36,6 +36,35 @@ App note: 待定。
 
 - 暂无。
 
+## [0.5.1] - 2026-05-11
+
+Release: 优化主题配色与预览体验，并修复挂件主题同步。
+
+App note: 优化主题配色与预览。
+
+### Added
+
+- 暂无。
+
+### Changed
+
+- 浅色主题列表调整为默认、Absolutely、Catppuccin、Everforest、GitHub、Gruvbox、Linear、Notion、One、Proof、Raycast、Rose Pine、Solarized、Vercel、VS Code Plus 和 Xcode。
+- 深色主题列表调整为默认、Absolutely、Ayu、Catppuccin、Dracula、Everforest、GitHub、Gruvbox、Linear、Lobster、Material、Matrix、Monokai、Night Owl、Nord、Notion、One、Oscurange、Raycast、Rose Pine、Sentry、Solarized、Temple、Tokyo Night、Vercel、VS Code Plus 和 Xcode。
+- 主题配色统一按 Quiet Pro token 转译，减轻浅色主题的内容底色，并增强浅色主题线框可见性。
+
+### Fixed
+
+- 修复侧边挂件在主窗口保存主题后不会跟随更新的问题。
+- 修复主题选择弹窗中点取消不会撤回临时预览的问题。
+
+### Removed
+
+- 暂无。
+
+### Internal
+
+- 为设置保存后的多窗口主题同步补充运行时通知，并更新设置归一化测试覆盖。
+
 ## [0.5.0] - 2026-05-10
 
 Release: 新增浅色、深色和跟随系统的外观设置，并支持分别选择主题配色。

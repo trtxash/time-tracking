@@ -14,6 +14,7 @@ import {
   type BackupPreview,
 } from "../../../platform/backup/backupRuntimeGateway.ts";
 import { openExternalUrl } from "../../../platform/desktop/externalUrlGateway.ts";
+import { emitAppSettingsChanged } from "../../../platform/runtime/appSettingsEventGateway.ts";
 import { setAfkThreshold } from "../../../platform/runtime/trackingRuntimeGateway.ts";
 import type { CleanupRange } from "../types.ts";
 import {
@@ -41,6 +42,7 @@ export interface SettingsCommitResult {
 interface SettingsCommitDeps {
   persistPatch: (patch: SettingsPatch) => Promise<void>;
   syncTimelineMergeGap: (seconds: number) => Promise<void>;
+  notifySettingsChanged: (patch: SettingsPatch) => Promise<void>;
 }
 type ExportBackupDeps = {
   pickBackupSaveFile: (initialPath?: string) => Promise<string | null>;
@@ -78,6 +80,7 @@ const prepareBackupRestoreDeps: PrepareBackupRestoreDeps = {
 const defaultSettingsCommitDeps: SettingsCommitDeps = {
   persistPatch: saveAppSettingsPatch,
   syncTimelineMergeGap: setAfkThreshold,
+  notifySettingsChanged: emitAppSettingsChanged,
 };
 
 export async function exportBackupWithPickerWithDeps(
@@ -192,6 +195,12 @@ export async function commitSettingsPatchWithDeps(
   await deps.persistPatch(patch as AppSettingsPatch);
 
   const runtimeSyncErrors: string[] = [];
+  try {
+    await deps.notifySettingsChanged(patch);
+  } catch (error) {
+    runtimeSyncErrors.push(error instanceof Error ? error.message : String(error));
+  }
+
   const timelineMergeGapSecs = patch.timelineMergeGapSecs;
   const needsRuntimeSync = typeof timelineMergeGapSecs === "number";
   if (needsRuntimeSync) {
@@ -204,11 +213,11 @@ export async function commitSettingsPatchWithDeps(
 
   return {
     persisted: true,
-    runtimeSync: !needsRuntimeSync
-      ? "not-needed"
-      : runtimeSyncErrors.length > 0
+    runtimeSync: runtimeSyncErrors.length > 0
         ? "failed"
-        : "synced",
+        : needsRuntimeSync
+          ? "synced"
+          : "not-needed",
     runtimeSyncErrors,
   };
 }

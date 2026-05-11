@@ -38,39 +38,50 @@ const COLOR_SCHEME_OPTIONS: Record<ThemeLibrary, Array<{
 }>> = {
   light: [
     { value: "default", label: "默认", swatches: ["#fbfbfb", "#ffffff", "#f5f5f5", "#315f9f", "#3f74c2", "#2f7d49"] },
-    { value: "ayu", label: "Ayu", swatches: ["#fafafa", "#f3f4f5", "#d9dce0", "#36a3d9", "#86b300", "#f29718"] },
-    { value: "catppuccin", label: "Catppuccin", swatches: ["#eff1f5", "#e6e9ef", "#ccd0da", "#1e66f5", "#40a02b", "#ea76cb"] },
-    { value: "dracula", label: "Dracula", swatches: ["#f8f8f2", "#eeeeea", "#d8d8d2", "#6272a4", "#bd93f9", "#ff79c6"] },
-    { value: "everforest", label: "Everforest", swatches: ["#fdf6e3", "#f4f0d9", "#d8d3ba", "#3a94c5", "#8da101", "#dfa000"] },
-    { value: "flexoki", label: "Flexoki", swatches: ["#fffcf0", "#f2f0e5", "#e6e4d9", "#205ea6", "#24837b", "#ad8301"] },
-    { value: "github", label: "GitHub", swatches: ["#ffffff", "#f6f8fa", "#d0d7de", "#0969da", "#2da44e", "#cf222e"] },
-    { value: "gruvbox", label: "Gruvbox", swatches: ["#fbf1c7", "#f2e5bc", "#d5c4a1", "#d65d0e", "#458588", "#9d0006"] },
-    { value: "kanagawa", label: "Kanagawa", swatches: ["#f2ecdc", "#fbf7ef", "#d8cfbc", "#4d699b", "#6f894e", "#c4746e"] },
-    { value: "material", label: "Material", swatches: ["#fafafa", "#ffffff", "#e0e0e0", "#1976d2", "#2e7d32", "#c2185b"] },
-    { value: "nord", label: "Nord", swatches: ["#f7f9fc", "#eceff4", "#d8dee9", "#5e81ac", "#81a1c1", "#bf616a"] },
-    { value: "one", label: "One", swatches: ["#fafafa", "#f4f5f7", "#d7dae0", "#4078f2", "#50a14f", "#a626a4"] },
-    { value: "rose-pine", label: "Rose Pine", swatches: ["#faf4ed", "#fffaf3", "#f2e9e1", "#907aa9", "#286983", "#b4637a"] },
-    { value: "solarized", label: "Solarized", swatches: ["#fdf6e3", "#eee8d5", "#93a1a1", "#268bd2", "#859900", "#d33682"] },
-    { value: "tokyo-night", label: "Tokyo Night", swatches: ["#e1e2e7", "#d5d6db", "#c4c8da", "#2e7de9", "#587539", "#9854f1"] },
-    { value: "vitesse", label: "Vitesse", swatches: ["#ffffff", "#f8f8f8", "#e2e2e3", "#3451b2", "#18794e", "#8e4ec6"] },
+    { value: "absolutely", label: "Absolutely", swatches: ["#f9f9f7", "#2d2d2b", "#cc7d5e", "#00c853", "#ff5f38", "#cc7d5e"] },
+    { value: "catppuccin", label: "Catppuccin", swatches: ["#eff1f5", "#4c4f69", "#8839ef", "#40a02b", "#d20f39", "#8839ef"] },
+    { value: "everforest", label: "Everforest", swatches: ["#fdf6e3", "#5c6a72", "#93b259", "#8da101", "#f85552", "#df69ba"] },
+    { value: "github", label: "GitHub", swatches: ["#ffffff", "#1f2328", "#0969da", "#1a7f37", "#cf222e", "#8250df"] },
+    { value: "gruvbox", label: "Gruvbox", swatches: ["#fbf1c7", "#3c3836", "#458588", "#3c3836", "#cc241d", "#b16286"] },
+    { value: "linear", label: "Linear", swatches: ["#fcfcfd", "#1b1b1b", "#5e6ad2", "#52a450", "#c94446", "#8160d8"] },
+    { value: "notion", label: "Notion", swatches: ["#ffffff", "#37352f", "#3183d8", "#008000", "#a31515", "#0000ff"] },
+    { value: "one", label: "One", swatches: ["#fafafa", "#383a42", "#526fff", "#3bba54", "#e45649", "#526fff"] },
+    { value: "proof", label: "Proof", swatches: ["#f5f3ed", "#2f312d", "#3d755d", "#3d755d", "#ba2623", "#5f6ac2"] },
+    { value: "raycast", label: "Raycast", swatches: ["#ffffff", "#030303", "#ff6363", "#006b4f", "#b12424", "#9a1b6e"] },
+    { value: "rose-pine", label: "Rose Pine", swatches: ["#faf4ed", "#575279", "#d7827e", "#56949f", "#797593", "#907aa9"] },
+    { value: "solarized", label: "Solarized", swatches: ["#fdf6e3", "#657b83", "#b58900", "#859900", "#dc322f", "#d33682"] },
+    { value: "vercel", label: "Vercel", swatches: ["#ffffff", "#171717", "#006aff", "#28a948", "#eb001d", "#a100f8"] },
+    { value: "vscode-plus", label: "VS Code Plus", swatches: ["#ffffff", "#000000", "#007acc", "#008000", "#ee0000", "#0000ff"] },
+    { value: "xcode", label: "Xcode", swatches: ["#ffffff", "#000000d9", "#0e0eff", "#00a240", "#c41a16", "#0e0eff"] },
   ],
   dark: [
     { value: "default", label: "默认", swatches: ["#212121", "#2d2d2d", "#404040", "#8ba1c0", "#93a9c8", "#82ad8b"] },
-    { value: "ayu", label: "Ayu", swatches: ["#0f1419", "#151a21", "#2d3640", "#59c2ff", "#bae67e", "#ffb454"] },
-    { value: "catppuccin", label: "Catppuccin", swatches: ["#1e1e2e", "#181825", "#313244", "#89b4fa", "#a6e3a1", "#f5c2e7"] },
-    { value: "dracula", label: "Dracula", swatches: ["#282a36", "#21222c", "#44475a", "#8be9fd", "#50fa7b", "#ff79c6"] },
-    { value: "everforest", label: "Everforest", swatches: ["#2b3339", "#323c41", "#4f5b58", "#7fbbb3", "#a7c080", "#e67e80"] },
-    { value: "flexoki", label: "Flexoki", swatches: ["#100f0f", "#1c1b1a", "#403e3c", "#4385be", "#3aa99f", "#d0a215"] },
-    { value: "github", label: "GitHub", swatches: ["#0d1117", "#161b22", "#30363d", "#2f81f7", "#3fb950", "#f85149"] },
-    { value: "gruvbox", label: "Gruvbox", swatches: ["#282828", "#3c3836", "#665c54", "#fe8019", "#83a598", "#fb4934"] },
-    { value: "kanagawa", label: "Kanagawa", swatches: ["#1f1f28", "#2a2a37", "#54546d", "#7e9cd8", "#98bb6c", "#e46876"] },
-    { value: "material", label: "Material", swatches: ["#121212", "#1e1e1e", "#343434", "#90caf9", "#a5d6a7", "#f48fb1"] },
-    { value: "nord", label: "Nord", swatches: ["#2e3440", "#3b4252", "#4c566a", "#88c0d0", "#81a1c1", "#bf616a"] },
-    { value: "one", label: "One", swatches: ["#282c34", "#21252b", "#3e4451", "#61afef", "#98c379", "#c678dd"] },
-    { value: "rose-pine", label: "Rose Pine", swatches: ["#191724", "#26233a", "#403d52", "#c4a7e7", "#31748f", "#eb6f92"] },
-    { value: "solarized", label: "Solarized", swatches: ["#002b36", "#073642", "#586e75", "#268bd2", "#2aa198", "#d33682"] },
-    { value: "tokyo-night", label: "Tokyo Night", swatches: ["#1a1b26", "#24283b", "#414868", "#7aa2f7", "#9ece6a", "#bb9af7"] },
-    { value: "vitesse", label: "Vitesse", swatches: ["#121212", "#1b1b1b", "#393939", "#a8b1ff", "#4fd1c5", "#f6ad55"] },
+    { value: "absolutely", label: "Absolutely", swatches: ["#2d2d2b", "#f9f9f7", "#cc7d5e", "#00c853", "#ff5f38", "#cc7d5e"] },
+    { value: "ayu", label: "Ayu", swatches: ["#0b0e14", "#bfbdb6", "#e6b450", "#7fd962", "#ea6c73", "#cda1fa"] },
+    { value: "catppuccin", label: "Catppuccin", swatches: ["#1e1e2e", "#cdd6f4", "#cba6f7", "#a6e3a1", "#f38ba8", "#cba6f7"] },
+    { value: "dracula", label: "Dracula", swatches: ["#282a36", "#f8f8f2", "#ff79c6", "#50fa7b", "#ff5555", "#ff79c6"] },
+    { value: "everforest", label: "Everforest", swatches: ["#2d353b", "#d3c6aa", "#a7c080", "#a7c080", "#e67e80", "#d699b6"] },
+    { value: "github", label: "GitHub", swatches: ["#0d1117", "#e6edf3", "#1f6feb", "#3fb950", "#f85149", "#bc8cff"] },
+    { value: "gruvbox", label: "Gruvbox", swatches: ["#282828", "#ebdbb2", "#458588", "#ebdbb2", "#cc241d", "#b16286"] },
+    { value: "linear", label: "Linear", swatches: ["#0f0f11", "#e3e4e6", "#606acc", "#69c967", "#ff7e78", "#c2a1ff"] },
+    { value: "lobster", label: "Lobster", swatches: ["#111827", "#e4e4e7", "#ff5c5c", "#22c55e", "#ff5c5c", "#3b82f6"] },
+    { value: "material", label: "Material", swatches: ["#212121", "#eeffff", "#80cbc4", "#c3e88d", "#f07178", "#c792ea"] },
+    { value: "matrix", label: "Matrix", swatches: ["#040805", "#b8ffca", "#1eff5a", "#1eff5a", "#fa423e", "#1eff5a"] },
+    { value: "monokai", label: "Monokai", swatches: ["#272822", "#f8f8f2", "#99947c", "#86b42b", "#c4265e", "#8c6bc8"] },
+    { value: "night-owl", label: "Night Owl", swatches: ["#011627", "#d6deeb", "#44596b", "#c5e478", "#ef5350", "#c792ea"] },
+    { value: "nord", label: "Nord", swatches: ["#2e3440", "#d8dee9", "#88c0d0", "#a3be8c", "#bf616a", "#b48ead"] },
+    { value: "notion", label: "Notion", swatches: ["#191919", "#d9d9d8", "#3183d8", "#4ec9b0", "#fa423e", "#3183d8"] },
+    { value: "one", label: "One", swatches: ["#282c34", "#abb2bf", "#4d78cc", "#8cc265", "#e05561", "#c162de"] },
+    { value: "oscurange", label: "Oscurange", swatches: ["#0b0b0f", "#e6e6e6", "#f9b98c", "#40c977", "#fa423e", "#479ffa"] },
+    { value: "raycast", label: "Raycast", swatches: ["#101010", "#fefefe", "#ff6363", "#59d499", "#ff6363", "#cf2f98"] },
+    { value: "rose-pine", label: "Rose Pine", swatches: ["#232136", "#e0def4", "#ea9a97", "#9ccfd8", "#908caa", "#c4a7e7"] },
+    { value: "sentry", label: "Sentry", swatches: ["#2d2935", "#e6dff9", "#7055f6", "#8ee6d7", "#fa423e", "#7055f6"] },
+    { value: "solarized", label: "Solarized", swatches: ["#002b36", "#839496", "#d30102", "#859900", "#dc322f", "#d33682"] },
+    { value: "temple", label: "Temple", swatches: ["#02120c", "#c7e6da", "#e4f222", "#40c977", "#fa423e", "#e4f222"] },
+    { value: "tokyo-night", label: "Tokyo Night", swatches: ["#1a1b26", "#a9b1d6", "#3d59a1", "#449dab", "#914c54", "#9d7cd8"] },
+    { value: "vercel", label: "Vercel", swatches: ["#000000", "#ededed", "#006efe", "#00ad3a", "#f13342", "#9540d5"] },
+    { value: "vscode-plus", label: "VS Code Plus", swatches: ["#1e1e1e", "#d4d4d4", "#007acc", "#369432", "#f44747", "#000080"] },
+    { value: "xcode", label: "Xcode", swatches: ["#1f1f24", "#ffffffd9", "#5482ff", "#67b7a4", "#fc6a5d", "#5482ff"] },
   ],
 };
 
@@ -85,12 +96,39 @@ export default function SettingsAppearancePanel({
   colorSchemeConfirming,
 }: SettingsAppearancePanelProps) {
   const [activeLibrary, setActiveLibrary] = useState<ThemeLibrary | null>(null);
+  const [dialogSnapshot, setDialogSnapshot] = useState<{
+    library: ThemeLibrary;
+    colorScheme: ColorScheme;
+  } | null>(null);
   const activeLibraryOption = THEME_LIBRARY_OPTIONS.find((option) => option.value === activeLibrary);
   const activeColorScheme = activeLibrary === "dark" ? colorSchemeDark : colorSchemeLight;
   const changeActiveColorScheme = activeLibrary === "dark" ? onColorSchemeDarkChange : onColorSchemeLightChange;
+
+  const openColorSchemeDialog = (library: ThemeLibrary) => {
+    setDialogSnapshot({
+      library,
+      colorScheme: library === "dark" ? colorSchemeDark : colorSchemeLight,
+    });
+    setActiveLibrary(library);
+  };
+
+  const closeColorSchemeDialog = () => {
+    if (dialogSnapshot) {
+      if (dialogSnapshot.library === "dark") {
+        onColorSchemeDarkChange(dialogSnapshot.colorScheme);
+      } else {
+        onColorSchemeLightChange(dialogSnapshot.colorScheme);
+      }
+    }
+
+    setDialogSnapshot(null);
+    setActiveLibrary(null);
+  };
+
   const handleConfirmColorScheme = async () => {
     const accepted = await onConfirmColorSchemeChange();
     if (accepted) {
+      setDialogSnapshot(null);
       setActiveLibrary(null);
     }
   };
@@ -135,7 +173,7 @@ export default function SettingsAppearancePanel({
             <button
               key={option.value}
               type="button"
-              onClick={() => setActiveLibrary(option.value)}
+              onClick={() => openColorSchemeDialog(option.value)}
               className="settings-theme-entry"
             >
               <span className="settings-theme-entry-title">{option.label}</span>
@@ -149,13 +187,13 @@ export default function SettingsAppearancePanel({
         open={activeLibrary !== null}
         title={activeLibraryOption?.label ?? "主题"}
         description="选择后会即时预览对应主题的整体配色，保存后生效。"
-        onClose={() => setActiveLibrary(null)}
+        onClose={closeColorSchemeDialog}
         surfaceClassName="qp-theme-dialog-surface"
         actions={(
           <>
             <button
               type="button"
-              onClick={() => setActiveLibrary(null)}
+              onClick={closeColorSchemeDialog}
               className="qp-button-secondary qp-dialog-action"
               disabled={colorSchemeConfirming}
             >

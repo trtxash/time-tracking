@@ -5,21 +5,33 @@ export type MinimizeBehavior = "taskbar" | "widget";
 export type ThemeMode = "light" | "dark" | "system";
 export type ColorScheme =
   | "default"
+  | "absolutely"
   | "ayu"
   | "catppuccin"
   | "dracula"
   | "everforest"
-  | "flexoki"
   | "github"
   | "gruvbox"
-  | "kanagawa"
+  | "linear"
+  | "lobster"
   | "material"
+  | "matrix"
+  | "monokai"
+  | "night-owl"
+  | "notion"
   | "nord"
   | "one"
+  | "oscurange"
+  | "proof"
+  | "raycast"
   | "rose-pine"
+  | "sentry"
   | "solarized"
+  | "temple"
   | "tokyo-night"
-  | "vitesse";
+  | "vercel"
+  | "vscode-plus"
+  | "xcode";
 
 export interface AppSettings {
   idleTimeoutSecs: number;

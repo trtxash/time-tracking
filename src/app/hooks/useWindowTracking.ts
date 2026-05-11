@@ -18,6 +18,8 @@ import {
 } from "../services/appRuntimeTrackingService";
 import {
   loadLatestTrackingPauseSetting,
+  loadCurrentAppSettings,
+  subscribeAppSettingsChanged,
 } from "../services/appSettingsRuntimeService.ts";
 import { startTrackerHealthPolling } from "../services/trackerHealthPollingService";
 import { applyTrackingDataChangedPayload } from "./trackingDataChangedRuntime";
@@ -123,6 +125,23 @@ export function useWindowTracking(options: UseWindowTrackingOptions = {}) {
         return;
       }
       unlisteners.push(trackingDataUnlisten);
+
+      const appSettingsChangedUnlisten = await subscribeAppSettingsChanged(async () => {
+        const nextSettings = await loadCurrentAppSettings().catch((error) => {
+          if (!cancelled) {
+            console.warn("Failed to reload app settings after settings change", error);
+          }
+          return null;
+        });
+        if (!cancelled && nextSettings) {
+          setAppSettings(nextSettings);
+        }
+      });
+      if (cancelled) {
+        appSettingsChangedUnlisten();
+        return;
+      }
+      unlisteners.push(appSettingsChangedUnlisten);
 
       stopTrackerHealthPolling = startTrackerHealthPolling((snapshot) => {
         if (!cancelled) {

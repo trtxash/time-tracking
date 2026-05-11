@@ -101,28 +101,59 @@ function normalizeThemeMode(value: string | undefined): ThemeMode {
   return normalized === "dark" || normalized === "system" ? normalized : "light";
 }
 
-function normalizeColorScheme(value: string | undefined): ColorScheme {
+const LIGHT_COLOR_SCHEMES = new Set<string>([
+  "default",
+  "absolutely",
+  "catppuccin",
+  "everforest",
+  "github",
+  "gruvbox",
+  "linear",
+  "notion",
+  "one",
+  "proof",
+  "raycast",
+  "rose-pine",
+  "solarized",
+  "vercel",
+  "vscode-plus",
+  "xcode",
+]);
+
+const DARK_COLOR_SCHEMES = new Set<string>([
+  "default",
+  "absolutely",
+  "ayu",
+  "catppuccin",
+  "dracula",
+  "everforest",
+  "github",
+  "gruvbox",
+  "linear",
+  "lobster",
+  "material",
+  "matrix",
+  "monokai",
+  "night-owl",
+  "nord",
+  "notion",
+  "one",
+  "oscurange",
+  "raycast",
+  "rose-pine",
+  "sentry",
+  "solarized",
+  "temple",
+  "tokyo-night",
+  "vercel",
+  "vscode-plus",
+  "xcode",
+]);
+
+function normalizeColorScheme(value: string | undefined, allowedSchemes: ReadonlySet<string>): ColorScheme {
   if (value === undefined) return "default";
   const normalized = value.trim().toLowerCase();
-  if (
-    normalized === "ayu"
-    || normalized === "catppuccin"
-    || normalized === "dracula"
-    || normalized === "everforest"
-    || normalized === "flexoki"
-    || normalized === "github"
-    || normalized === "gruvbox"
-    || normalized === "kanagawa"
-    || normalized === "material"
-    || normalized === "nord"
-    || normalized === "one"
-    || normalized === "rose-pine"
-    || normalized === "solarized"
-    || normalized === "tokyo-night"
-    || normalized === "vitesse"
-  ) {
-    return normalized;
-  }
+  if (allowedSchemes.has(normalized)) return normalized as ColorScheme;
   return "default";
 }
 
@@ -161,9 +192,11 @@ export function normalizeSettingsRecord(record: Record<string, string | undefine
     themeMode: normalizeThemeMode(record.theme_mode),
     colorSchemeLight: normalizeColorScheme(
       record.color_scheme_light ?? record.color_scheme ?? DEFAULT_SETTINGS.colorSchemeLight,
+      LIGHT_COLOR_SCHEMES,
     ),
     colorSchemeDark: normalizeColorScheme(
       record.color_scheme_dark ?? record.color_scheme ?? DEFAULT_SETTINGS.colorSchemeDark,
+      DARK_COLOR_SCHEMES,
     ),
     launchAtLogin: parseBooleanSetting(record.launch_at_login, DEFAULT_SETTINGS.launchAtLogin),
     startMinimized: parseBooleanSetting(record.start_minimized, DEFAULT_SETTINGS.startMinimized),

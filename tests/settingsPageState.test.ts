@@ -23,38 +23,62 @@ interface AppSettings {
   themeMode: "light" | "dark" | "system";
   colorSchemeLight:
     | "default"
+    | "absolutely"
     | "ayu"
     | "catppuccin"
     | "dracula"
     | "everforest"
-    | "flexoki"
     | "github"
     | "gruvbox"
-    | "kanagawa"
+    | "linear"
+    | "lobster"
     | "material"
+    | "matrix"
+    | "monokai"
+    | "night-owl"
+    | "notion"
     | "nord"
     | "one"
+    | "oscurange"
+    | "proof"
+    | "raycast"
     | "rose-pine"
+    | "sentry"
     | "solarized"
+    | "temple"
     | "tokyo-night"
-    | "vitesse";
+    | "vercel"
+    | "vscode-plus"
+    | "xcode";
   colorSchemeDark:
     | "default"
+    | "absolutely"
     | "ayu"
     | "catppuccin"
     | "dracula"
     | "everforest"
-    | "flexoki"
     | "github"
     | "gruvbox"
-    | "kanagawa"
+    | "linear"
+    | "lobster"
     | "material"
+    | "matrix"
+    | "monokai"
+    | "night-owl"
+    | "notion"
     | "nord"
     | "one"
+    | "oscurange"
+    | "proof"
+    | "raycast"
     | "rose-pine"
+    | "sentry"
     | "solarized"
+    | "temple"
     | "tokyo-night"
-    | "vitesse";
+    | "vercel"
+    | "vscode-plus"
+    | "xcode";
   launchAtLogin: boolean;
   startMinimized: boolean;
   onboardingCompleted: boolean;
@@ -114,7 +138,7 @@ await runTest("buildSettingsPatch only keeps changed keys", () => {
     minSessionSecs: saved.minSessionSecs + 60,
     trackingPaused: true,
     themeMode: "dark",
-    colorSchemeLight: "nord",
+    colorSchemeLight: "linear",
     colorSchemeDark: "github",
   });
 
@@ -122,7 +146,7 @@ await runTest("buildSettingsPatch only keeps changed keys", () => {
     minSessionSecs: draft.minSessionSecs,
     trackingPaused: true,
     themeMode: "dark",
-    colorSchemeLight: "nord",
+    colorSchemeLight: "linear",
     colorSchemeDark: "github",
   });
 });
@@ -136,6 +160,9 @@ await runTest("commitSettingsPatchWithDeps returns not-needed for empty patches"
     },
     syncTimelineMergeGap: async () => {
       events.push("sync");
+    },
+    notifySettingsChanged: async () => {
+      events.push("notify");
     },
   });
 
@@ -160,6 +187,9 @@ await runTest("commitSettingsPatchWithDeps persists before runtime sync", async 
     syncTimelineMergeGap: async (seconds) => {
       events.push(`sync:${seconds}`);
     },
+    notifySettingsChanged: async (patch) => {
+      events.push(`notify:${Object.keys(patch).length}`);
+    },
   });
 
   assert.deepEqual(result, {
@@ -169,6 +199,7 @@ await runTest("commitSettingsPatchWithDeps persists before runtime sync", async 
   });
   assert.deepEqual(events, [
     "persist:2",
+    "notify:2",
     "sync:180",
   ]);
 });
@@ -186,6 +217,9 @@ await runTest("commitSettingsPatchWithDeps keeps persisted success when runtime 
       events.push("sync");
       throw new Error("runtime unavailable");
     },
+    notifySettingsChanged: async () => {
+      events.push("notify");
+    },
   });
 
   assert.deepEqual(result, {
@@ -195,6 +229,7 @@ await runTest("commitSettingsPatchWithDeps keeps persisted success when runtime 
   });
   assert.deepEqual(events, [
     "persist",
+    "notify",
     "sync",
   ]);
 });
@@ -212,6 +247,9 @@ await runTest("commitSettingsPatchWithDeps does not attempt runtime sync when pe
       },
       syncTimelineMergeGap: async () => {
         events.push("sync");
+      },
+      notifySettingsChanged: async () => {
+        events.push("notify");
       },
     }),
     /disk full/,
@@ -256,21 +294,48 @@ await runTest("normalizeSettingsRecord accepts theme modes and falls back to lig
 
 await runTest("normalizeSettingsRecord accepts color schemes and falls back to default", () => {
   assert.equal(normalizeSettingsRecord({ color_scheme_light: "default" }).colorSchemeLight, "default");
-  assert.equal(normalizeSettingsRecord({ color_scheme_light: "ayu" }).colorSchemeLight, "ayu");
+  assert.equal(normalizeSettingsRecord({ color_scheme_light: "absolutely" }).colorSchemeLight, "absolutely");
   assert.equal(normalizeSettingsRecord({ color_scheme_light: "catppuccin" }).colorSchemeLight, "catppuccin");
-  assert.equal(normalizeSettingsRecord({ color_scheme_light: "dracula" }).colorSchemeLight, "dracula");
   assert.equal(normalizeSettingsRecord({ color_scheme_light: "everforest" }).colorSchemeLight, "everforest");
-  assert.equal(normalizeSettingsRecord({ color_scheme_light: "flexoki" }).colorSchemeLight, "flexoki");
-  assert.equal(normalizeSettingsRecord({ color_scheme_light: "nord" }).colorSchemeLight, "nord");
   assert.equal(normalizeSettingsRecord({ color_scheme_light: "github" }).colorSchemeLight, "github");
+  assert.equal(normalizeSettingsRecord({ color_scheme_light: "gruvbox" }).colorSchemeLight, "gruvbox");
+  assert.equal(normalizeSettingsRecord({ color_scheme_light: "linear" }).colorSchemeLight, "linear");
+  assert.equal(normalizeSettingsRecord({ color_scheme_light: "notion" }).colorSchemeLight, "notion");
+  assert.equal(normalizeSettingsRecord({ color_scheme_light: "one" }).colorSchemeLight, "one");
+  assert.equal(normalizeSettingsRecord({ color_scheme_light: "proof" }).colorSchemeLight, "proof");
+  assert.equal(normalizeSettingsRecord({ color_scheme_light: "raycast" }).colorSchemeLight, "raycast");
+  assert.equal(normalizeSettingsRecord({ color_scheme_light: "rose-pine" }).colorSchemeLight, "rose-pine");
+  assert.equal(normalizeSettingsRecord({ color_scheme_light: "solarized" }).colorSchemeLight, "solarized");
+  assert.equal(normalizeSettingsRecord({ color_scheme_light: "vercel" }).colorSchemeLight, "vercel");
+  assert.equal(normalizeSettingsRecord({ color_scheme_light: "vscode-plus" }).colorSchemeLight, "vscode-plus");
+  assert.equal(normalizeSettingsRecord({ color_scheme_light: "xcode" }).colorSchemeLight, "xcode");
+  assert.equal(normalizeSettingsRecord({ color_scheme_light: "nord" }).colorSchemeLight, "default");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "absolutely" }).colorSchemeDark, "absolutely");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "ayu" }).colorSchemeDark, "ayu");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "catppuccin" }).colorSchemeDark, "catppuccin");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "dracula" }).colorSchemeDark, "dracula");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "everforest" }).colorSchemeDark, "everforest");
   assert.equal(normalizeSettingsRecord({ color_scheme_dark: "gruvbox" }).colorSchemeDark, "gruvbox");
-  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "kanagawa" }).colorSchemeDark, "kanagawa");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "linear" }).colorSchemeDark, "linear");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "lobster" }).colorSchemeDark, "lobster");
   assert.equal(normalizeSettingsRecord({ color_scheme_dark: "material" }).colorSchemeDark, "material");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "matrix" }).colorSchemeDark, "matrix");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "monokai" }).colorSchemeDark, "monokai");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "night-owl" }).colorSchemeDark, "night-owl");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "notion" }).colorSchemeDark, "notion");
   assert.equal(normalizeSettingsRecord({ color_scheme_dark: "one" }).colorSchemeDark, "one");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "oscurange" }).colorSchemeDark, "oscurange");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "raycast" }).colorSchemeDark, "raycast");
   assert.equal(normalizeSettingsRecord({ color_scheme_dark: "rose-pine" }).colorSchemeDark, "rose-pine");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "sentry" }).colorSchemeDark, "sentry");
   assert.equal(normalizeSettingsRecord({ color_scheme_dark: "solarized" }).colorSchemeDark, "solarized");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "temple" }).colorSchemeDark, "temple");
   assert.equal(normalizeSettingsRecord({ color_scheme_dark: "tokyo-night" }).colorSchemeDark, "tokyo-night");
-  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "vitesse" }).colorSchemeDark, "vitesse");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "vercel" }).colorSchemeDark, "vercel");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "vscode-plus" }).colorSchemeDark, "vscode-plus");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "xcode" }).colorSchemeDark, "xcode");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "kanagawa" }).colorSchemeDark, "default");
+  assert.equal(normalizeSettingsRecord({ color_scheme_dark: "vitesse" }).colorSchemeDark, "default");
   assert.equal(normalizeSettingsRecord({ color_scheme_dark: "NORD" }).colorSchemeDark, "nord");
   assert.equal(normalizeSettingsRecord({ color_scheme_light: "marketplace" }).colorSchemeLight, "default");
   assert.deepEqual(
@@ -279,6 +344,13 @@ await runTest("normalizeSettingsRecord accepts color schemes and falls back to d
       dark: normalizeSettingsRecord({ color_scheme: "github" }).colorSchemeDark,
     },
     { light: "github", dark: "github" },
+  );
+  assert.deepEqual(
+    {
+      light: normalizeSettingsRecord({ color_scheme: "nord" }).colorSchemeLight,
+      dark: normalizeSettingsRecord({ color_scheme: "nord" }).colorSchemeDark,
+    },
+    { light: "default", dark: "nord" },
   );
 });
 

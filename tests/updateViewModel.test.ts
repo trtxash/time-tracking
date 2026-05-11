@@ -18,7 +18,7 @@ function makeSnapshot(overrides: Partial<UpdateSnapshot> = {}): UpdateSnapshot {
     errorStage: null,
     downloadedBytes: null,
     totalBytes: null,
-    releasePageUrl: "https://github.com/182376/time-tracking/releases",
+    releasePageUrl: "https://github.com/Ceceliaee/time-tracking/releases",
     assetDownloadUrl: null,
     ...overrides,
   };

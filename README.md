@@ -67,7 +67,7 @@ It is not currently aimed at:
 
 Prebuilt releases are published on GitHub:
 
-- Releases: <https://github.com/182376/time-tracking/releases>
+- Releases: <https://github.com/Ceceliaee/time-tracking/releases>
 
 If you just want to use the app, start there.
 
@@ -88,7 +88,7 @@ If you just want to use the app, start there.
 ### Install
 
 ```bash
-git clone https://github.com/182376/time-tracking.git
+git clone https://github.com/Ceceliaee/time-tracking.git
 cd time-tracking
 npm install
 ```
@@ -145,8 +145,8 @@ If you are contributing or reviewing the project direction, start with:
 
 ## Feedback
 
-- Releases: <https://github.com/182376/time-tracking/releases>
-- Issues: <https://github.com/182376/time-tracking/issues/new/choose>
+- Releases: <https://github.com/Ceceliaee/time-tracking/releases>
+- Issues: <https://github.com/Ceceliaee/time-tracking/issues/new/choose>
 
 ## License
 

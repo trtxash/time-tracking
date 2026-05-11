@@ -111,7 +111,7 @@ async function syncVersion(version) {
       ...tauriConfig.plugins?.updater,
       active: true,
       dialog: false,
-      endpoints: ["https://raw.githubusercontent.com/182376/time-tracking/updates/latest.json"],
+      endpoints: ["https://raw.githubusercontent.com/Ceceliaee/time-tracking/updates/latest.json"],
     },
   };
   await writeJson(TAURI_CONFIG_PATH, tauriConfig);

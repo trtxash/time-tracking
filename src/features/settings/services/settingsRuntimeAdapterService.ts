@@ -51,8 +51,8 @@ type PrepareBackupRestoreDeps = {
   previewBackup: (path: string) => Promise<BackupPreview>;
 };
 
-const RELEASE_NOTES_URL = "https://github.com/182376/time-tracking/releases";
-const FEEDBACK_URL = "https://github.com/182376/time-tracking/issues/new/choose";
+const RELEASE_NOTES_URL = "https://github.com/Ceceliaee/time-tracking/releases";
+const FEEDBACK_URL = "https://github.com/Ceceliaee/time-tracking/issues/new/choose";
 
 function buildBackupPreviewSummary(preview: BackupPreview): string {
   const exportedAt = new Date(preview.exportedAtMs).toLocaleString();

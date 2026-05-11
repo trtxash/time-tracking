@@ -10,7 +10,7 @@ use crate::domain::update::{UpdateErrorStage, UpdateSnapshot, UpdateStatus};
 
 const STARTUP_AUTO_CHECK_DELAYS_MS: [u64; 3] = [3_500, 15_000, 60_000];
 const UPDATE_SNAPSHOT_CHANGED_EVENT: &str = "update-snapshot-changed";
-const RELEASES_BASE_URL: &str = "https://github.com/182376/time-tracking/releases";
+const RELEASES_BASE_URL: &str = "https://github.com/Ceceliaee/time-tracking/releases";
 
 #[derive(Clone)]
 pub struct UpdaterRuntimeState {

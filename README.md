@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Time Tracker is a local-first Windows desktop time tracking app. It automatically records the foreground app you are actively using, then organizes that activity into today's overview, a historical timeline, long-term analytics, and manageable app mappings.
+Time Tracker is a local-first Windows desktop time tracking app. It automatically records the foreground app you are actively using, then organizes that activity into today's overview, a historical timeline, long-term analytics, and manageable apps.
 
 Its core goal is not to be a complex team timesheet system. It is designed as a trustworthy, quiet, long-term personal desktop time record.
 
@@ -16,7 +16,6 @@ Time Tracker is mainly designed for people who:
 - Want to know which apps and categories take up most of each day
 - Prefer automatic recording without manually starting, pausing, or stopping a timer
 - Need to review history by day and observe longer-term activity trends
-- Want to correct app names, categories, colors, and counting rules
 - Want data to stay local by default, with backup, restore, and cleanup under their control
 - Care about window title capture, stats exclusions, and a low-interruption desktop experience
 

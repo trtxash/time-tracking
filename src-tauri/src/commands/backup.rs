@@ -1,5 +1,5 @@
 use crate::app;
-use crate::data::backup;
+use crate::data::backup::{self, RestoreStrategy};
 use crate::domain::backup::BackupPreview;
 use tauri::AppHandle;
 
@@ -22,8 +22,13 @@ pub async fn cmd_export_backup(
 }
 
 #[tauri::command]
-pub async fn cmd_restore_backup(backup_path: String, app: AppHandle) -> Result<(), String> {
-    app::backup::restore_backup_and_refresh(app, backup_path).await
+pub async fn cmd_restore_backup(
+    backup_path: String,
+    restore_strategy: Option<RestoreStrategy>,
+    app: AppHandle,
+) -> Result<(), String> {
+    app::backup::restore_backup_and_refresh(app, backup_path, restore_strategy.unwrap_or_default())
+        .await
 }
 
 #[tauri::command]

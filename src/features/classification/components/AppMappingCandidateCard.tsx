@@ -1,6 +1,6 @@
 import { Pencil, RotateCcw, Trash2 } from "lucide-react";
 import type { ObservedAppCandidate } from "../types";
-import type { UserAssignableAppCategory } from "../config/categoryTokens";
+import type { UserAssignableAppCategory } from "../../../shared/classification/categoryTokens";
 import type { ColorDisplayFormat } from "../../../shared/lib/colorFormatting";
 import QuietSelect from "../../../shared/components/QuietSelect";
 import QuietColorField from "../../../shared/components/QuietColorField";

@@ -1,5 +1,5 @@
 import { Trash2 } from "lucide-react";
-import type { AppCategory } from "../config/categoryTokens";
+import type { AppCategory } from "../../../shared/classification/categoryTokens";
 import QuietColorField from "../../../shared/components/QuietColorField";
 import QuietIconAction from "../../../shared/components/QuietIconAction";
 import QuietResetAction from "../../../shared/components/QuietResetAction";

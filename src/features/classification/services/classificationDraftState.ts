@@ -3,8 +3,8 @@ import {
   isCustomCategory,
   type AppCategory,
   type CustomAppCategory,
-} from "../config/categoryTokens.ts";
-import type { AppOverride } from "./ProcessMapper.ts";
+} from "../../../shared/classification/categoryTokens.ts";
+import type { AppOverride } from "../../../shared/classification/processMapper.ts";
 
 export interface ClassificationDraftState {
   overrides: Record<string, AppOverride>;

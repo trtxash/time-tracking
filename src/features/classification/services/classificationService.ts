@@ -1,9 +1,9 @@
-import { ProcessMapper } from "./ProcessMapper.ts";
-import type { AppOverride } from "./ProcessMapper.ts";
+import { ProcessMapper } from "../../../shared/classification/processMapper.ts";
+import type { AppOverride } from "../../../shared/classification/processMapper.ts";
 import {
   type AppCategory,
   type CustomAppCategory,
-} from "../config/categoryTokens.ts";
+} from "../../../shared/classification/categoryTokens.ts";
 import * as classificationStore from "./classificationStore.ts";
 import type { ObservedAppCandidate } from "./classificationStore.ts";
 import {
@@ -17,7 +17,7 @@ import {
   type ClassificationDraftState,
 } from "./classificationDraftState.ts";
 
-export type { AppOverride } from "./ProcessMapper.ts";
+export type { AppOverride } from "../../../shared/classification/processMapper.ts";
 export type { ClassificationDraftState } from "./classificationDraftState.ts";
 
 export interface ClassificationBootstrapData {

@@ -44,6 +44,25 @@ pub async fn insert_for_restore(
     Ok(())
 }
 
+pub async fn insert_missing_for_restore(
+    tx: &mut Transaction<'_, Sqlite>,
+    icon_cache: &[BackupIconCache],
+) -> Result<(), String> {
+    for icon in icon_cache {
+        sqlx::query(
+            "INSERT OR IGNORE INTO icon_cache (exe_name, icon_base64, last_updated) VALUES (?, ?, ?)",
+        )
+        .bind(&icon.exe_name)
+        .bind(&icon.icon_base64)
+        .bind(icon.last_updated)
+        .execute(&mut **tx)
+        .await
+        .map_err(|error| format!("failed to merge restore icon cache: {error}"))?;
+    }
+
+    Ok(())
+}
+
 pub async fn is_icon_cached(pool: &Pool<Sqlite>, exe_name: &str) -> Result<bool, sqlx::Error> {
     Ok(
         sqlx::query("SELECT exe_name FROM icon_cache WHERE exe_name = ? LIMIT 1")

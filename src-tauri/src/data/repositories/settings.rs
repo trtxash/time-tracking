@@ -39,3 +39,19 @@ pub async fn insert_for_restore(
 
     Ok(())
 }
+
+pub async fn insert_missing_for_restore(
+    tx: &mut Transaction<'_, Sqlite>,
+    settings: &[BackupSetting],
+) -> Result<(), String> {
+    for setting in settings {
+        sqlx::query("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)")
+            .bind(&setting.key)
+            .bind(&setting.value)
+            .execute(&mut **tx)
+            .await
+            .map_err(|error| format!("failed to merge restore settings: {error}"))?;
+    }
+
+    Ok(())
+}

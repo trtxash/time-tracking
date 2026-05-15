@@ -1,7 +1,7 @@
 import { UI_TEXT } from "../../../shared/copy/uiText.ts";
 import type { QuietToastTone } from "../../../shared/components/QuietToast";
 import type { CleanupRange } from "../types.ts";
-import type { BackupRestorePreparation } from "./settingsRuntimeAdapterService.ts";
+import type { BackupRestorePreparation, BackupRestoreStrategy } from "./settingsRuntimeAdapterService.ts";
 
 interface ConfirmOptions {
   title: string;
@@ -39,10 +39,11 @@ type BackupExportFlowOptions = {
 
 type BackupRestoreFlowOptions = {
   initialPath?: string;
+  restoreStrategy: BackupRestoreStrategy;
   prepareBackupRestore: (initialPath?: string) => Promise<BackupRestorePreparation | null>;
   setRestorePath: (path: string) => void;
   confirm: ConfirmAction;
-  restoreBackup: (path: string) => Promise<void>;
+  restoreBackup: (path: string, restoreStrategy: BackupRestoreStrategy) => Promise<void>;
   notify: NotifyAction;
   reload: () => void;
   onExecutionStart?: BusyHook;
@@ -126,7 +127,11 @@ export async function runBackupRestoreFlow(options: BackupRestoreFlowOptions): P
 
   const confirmed = await options.confirm({
     title: UI_TEXT.settings.restoreConfirmTitle,
-    description: UI_TEXT.settings.restoreConfirmDetail(preparation.path, preparation.previewSummary),
+    description: UI_TEXT.settings.restoreConfirmDetail(
+      preparation.path,
+      preparation.previewSummary,
+      UI_TEXT.settings.restoreStrategyOptions[options.restoreStrategy],
+    ),
     confirmLabel: UI_TEXT.dialog.confirmDanger,
     danger: true,
   });
@@ -136,7 +141,7 @@ export async function runBackupRestoreFlow(options: BackupRestoreFlowOptions): P
 
   options.onExecutionStart?.();
   try {
-    await options.restoreBackup(preparation.path);
+    await options.restoreBackup(preparation.path, options.restoreStrategy);
     options.notify(UI_TEXT.toast.backupRestoreSuccess, "success");
     options.reload();
     return true;

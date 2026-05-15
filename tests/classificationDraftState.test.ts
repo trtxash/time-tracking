@@ -3,13 +3,16 @@ import {
   buildCustomCategory,
   USER_ASSIGNABLE_CATEGORIES,
   type UserAssignableAppCategory,
-} from "../src/features/classification/config/categoryTokens.ts";
+} from "../src/shared/classification/categoryTokens.ts";
 import {
   buildAppMappingOverride,
   createAppMappingDraftState,
   filterAndSortCandidates,
 } from "../src/features/classification/hooks/appMappingStateHelpers.ts";
 import type { ObservedAppCandidate } from "../src/features/classification/services/classificationStore.ts";
+import {
+  buildAppOverrideTransition,
+} from "../src/features/classification/services/classificationStore.ts";
 import {
   type ClassificationCommitDeps,
   commitDraftChangesWithDeps,
@@ -114,6 +117,37 @@ await runTest("first install assignable categories match the lean default set", 
     ProcessMapper.fromOverrideStorageValue(JSON.stringify({ category: "finance", enabled: true }))?.category,
     "utility",
   );
+});
+
+await runTest("legacy classification overrides are normalized for transition writeback", () => {
+  const transition = buildAppOverrideTransition(
+    "__app_override::Zoom.exe",
+    JSON.stringify({ category: "meeting", enabled: true, updatedAt: 123 }),
+  );
+
+  assert.equal(transition.canonicalExe, "zoom.exe");
+  assert.equal(transition.override?.category, "office");
+  assert.deepEqual(transition.mutations, [
+    {
+      key: "__app_override::Zoom.exe",
+      value: null,
+    },
+    {
+      key: "__app_override::zoom.exe",
+      value: ProcessMapper.toOverrideStorageValue(transition.override!),
+    },
+  ]);
+});
+
+await runTest("legacy plain category overrides are rewritten as current JSON", () => {
+  const transition = buildAppOverrideTransition("__app_override::reader.exe", "reading");
+
+  assert.equal(transition.canonicalExe, "reader.exe");
+  assert.equal(transition.override?.category, "browser");
+  assert.deepEqual(transition.mutations, [{
+    key: "__app_override::reader.exe",
+    value: ProcessMapper.toOverrideStorageValue(transition.override!),
+  }]);
 });
 
 await runTest("hasClassificationDraftChanges ignores unsupported deleted categories", () => {

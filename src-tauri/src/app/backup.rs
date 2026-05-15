@@ -1,13 +1,14 @@
 use crate::app::desktop_behavior;
-use crate::data::backup;
+use crate::data::backup::{self, RestoreStrategy};
 use crate::engine::tracking::runtime as tracking_runtime;
 use tauri::AppHandle;
 
 pub(crate) async fn restore_backup_and_refresh(
     app: AppHandle,
     backup_path: String,
+    strategy: RestoreStrategy,
 ) -> Result<(), String> {
-    backup::restore_backup(backup_path, app.clone()).await?;
+    backup::restore_backup(backup_path, app.clone(), strategy).await?;
     desktop_behavior::sync_desktop_behavior_from_storage(app.clone(), false).await?;
     tracking_runtime::emit_tracking_data_changed(&app, "backup-restored", now_ms())
         .map_err(|error| format!("failed to emit restore refresh event: {error}"))?;

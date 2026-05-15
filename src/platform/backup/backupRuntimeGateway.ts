@@ -28,6 +28,8 @@ export interface BackupPreview {
   iconCacheCount: number;
 }
 
+export type BackupRestoreStrategy = "replace" | "merge";
+
 function isRawBackupPreview(value: unknown): value is RawBackupPreview {
   if (!value || typeof value !== "object") {
     return false;
@@ -72,8 +74,8 @@ export async function exportBackup(path?: string): Promise<string> {
   return invoke<string>("cmd_export_backup", { backupPath: path ?? null });
 }
 
-export async function restoreBackup(path: string): Promise<void> {
-  await invoke("cmd_restore_backup", { backupPath: path });
+export async function restoreBackup(path: string, restoreStrategy: BackupRestoreStrategy): Promise<void> {
+  await invoke("cmd_restore_backup", { backupPath: path, restoreStrategy });
 }
 
 export async function previewBackup(path: string): Promise<BackupPreview> {

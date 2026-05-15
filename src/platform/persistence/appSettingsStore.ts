@@ -217,6 +217,30 @@ export function normalizeSettingsRecord(record: Record<string, string | undefine
   };
 }
 
+export function buildAppSettingsTransitionPatch(
+  record: Record<string, string | undefined>,
+  settings: AppSettings = normalizeSettingsRecord(record),
+): Record<string, PersistedSettingValue> {
+  const patch: Record<string, PersistedSettingValue> = {};
+
+  // Transitional writeback for settings produced before split light/dark schemes.
+  if (record.color_scheme !== undefined) {
+    if (record.color_scheme_light === undefined) {
+      patch.color_scheme_light = settings.colorSchemeLight;
+    }
+    if (record.color_scheme_dark === undefined) {
+      patch.color_scheme_dark = settings.colorSchemeDark;
+    }
+  }
+
+  // Transitional writeback for the retired tray-as-minimize value.
+  if (record.minimize_behavior?.trim().toLowerCase() === "tray") {
+    patch.minimize_behavior = settings.minimizeBehavior;
+  }
+
+  return patch;
+}
+
 export function buildRawAppSettingsPatch(patch: AppSettingsPatch): Record<string, PersistedSettingValue> {
   const rawPatch: Record<string, PersistedSettingValue> = {};
   const entries = Object.entries(patch) as Array<[keyof AppSettings, AppSettings[keyof AppSettings]]>;
@@ -233,7 +257,12 @@ export async function loadAppSettings(): Promise<AppSettings> {
   for (const row of rows) {
     record[row.key] = row.value;
   }
-  return normalizeSettingsRecord(record);
+  const settings = normalizeSettingsRecord(record);
+  const transitionPatch = buildAppSettingsTransitionPatch(record, settings);
+  if (Object.keys(transitionPatch).length > 0) {
+    await saveSettingEntries(transitionPatch);
+  }
+  return settings;
 }
 
 export async function saveAppSetting<K extends keyof AppSettings>(

@@ -17,6 +17,7 @@ import {
 import type { AppSettings } from "../../../shared/settings/appSettings";
 import type { ThemeLibrary } from "../../../shared/settings/colorSchemeOptions.ts";
 import type { CleanupRange } from "../types";
+import type { BackupRestoreStrategy } from "../services/settingsRuntimeAdapterService.ts";
 
 const buildCleanupOptions = (): Array<{ value: CleanupRange; label: string }> => [
   { value: 180, label: UI_TEXT.settings.cleanupRangeLabels[180] },
@@ -65,6 +66,7 @@ export function useSettingsPageState({
   const [isCleaning, setIsCleaning] = useState(false);
   const [exportPath, setExportPath] = useState("");
   const [restorePath, setRestorePath] = useState("");
+  const [restoreStrategy, setRestoreStrategy] = useState<BackupRestoreStrategy>("replace");
   const [isExportingBackup, setIsExportingBackup] = useState(false);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
   const [appVersion, setAppVersion] = useState(() => initialBootstrap?.appVersion ?? "-");
@@ -277,6 +279,7 @@ export function useSettingsPageState({
     if (isRestoringBackup) return;
     await runBackupRestoreFlow({
       initialPath: restorePath,
+      restoreStrategy,
       prepareBackupRestore: SettingsRuntimeAdapterService.prepareBackupRestore,
       setRestorePath,
       confirm,
@@ -289,7 +292,7 @@ export function useSettingsPageState({
         console.error(message, error);
       },
     });
-  }, [confirm, isRestoringBackup, notify, restorePath]);
+  }, [confirm, isRestoringBackup, notify, restorePath, restoreStrategy]);
 
   const handleOpenReleaseNotes = useCallback(async () => {
     try {
@@ -345,6 +348,8 @@ export function useSettingsPageState({
     handleChange,
     cleanupRange,
     setCleanupRange,
+    restoreStrategy,
+    setRestoreStrategy,
     isCleaning,
     isExportingBackup,
     isRestoringBackup,

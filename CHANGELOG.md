@@ -36,6 +36,34 @@ App note: 待定。
 
 - 暂无。
 
+## [0.6.5] - 2026-05-15
+
+Release: 保留旧数据升级入口，归一旧设置和应用分类，并统一新备份格式。
+
+App note: 保留旧数据升级，并导出新备份。
+
+### Added
+
+- 暂无。
+
+### Changed
+
+- 旧应用分类 override 和旧设置值会在读取后归一写回当前格式，为下一版移除兼容代码做准备。
+- 备份导出统一使用当前结构化 `.zip` 格式；旧 `.json`、`.ttbackup` 和旧 zip 内 `backup.json` 仍可作为过渡导入格式读取。
+
+### Fixed
+
+- 暂无。
+
+### Removed
+
+- 暂无。
+
+### Internal
+
+- 删除应用分类 feature 下的历史转发壳，调用方直接使用 `shared/classification/*` 的真实 owner。
+- 保留 0.6.4 SQLite migration repair 与 no-op migration，避免已安装版本升级时数据库启动失败。
+
 ## [0.6.4] - 2026-05-15
 
 Release: 修复文件资源管理器与桌面识别，并补充中文 README 与基础 i18n 结构。

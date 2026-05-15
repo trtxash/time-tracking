@@ -1,4 +1,4 @@
-import { Monitor } from "lucide-react";
+import { MonitorCog } from "lucide-react";
 import QuietSwitch from "../../../shared/components/QuietSwitch";
 import { UI_TEXT } from "../../../shared/copy/uiText.ts";
 
@@ -28,7 +28,7 @@ export default function SettingsResidentPanel({
   return (
     <section className="qp-panel min-h-[220px] p-5 md:p-6">
       <div className="flex items-center gap-2.5 border-b border-[var(--qp-border-subtle)] pb-2">
-        <Monitor size={16} className="text-[var(--qp-accent-default)]" />
+        <MonitorCog size={16} className="text-[var(--qp-accent-default)]" />
         <h2 className="text-sm font-semibold text-[var(--qp-text-primary)]">{UI_TEXT.settings.residentTitle}</h2>
       </div>
 

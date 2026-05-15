@@ -1,5 +1,5 @@
 import type { CandidateFilter, ObservedAppCandidate } from "../types.ts";
-import type { UserAssignableAppCategory } from "../config/categoryTokens.ts";
+import type { UserAssignableAppCategory } from "../../../shared/classification/categoryTokens.ts";
 import type { AppOverride } from "../services/classificationService.ts";
 import { getUiLocale } from "../../../shared/copy/uiText.ts";
 import {

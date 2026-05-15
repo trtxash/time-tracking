@@ -1,5 +1,5 @@
-import { ProcessMapper, type AppOverride } from "../../features/classification/services/ProcessMapper.ts";
-import type { AppCategory } from "../../features/classification/config/categoryTokens.ts";
+import { ProcessMapper, type AppOverride } from "../../shared/classification/processMapper.ts";
+import type { AppCategory } from "../../shared/classification/categoryTokens.ts";
 import {
   loadAppOverrides,
   loadCategoryColorOverrides,

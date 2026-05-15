@@ -118,6 +118,9 @@ function normalizeUserAssignableCategory(category: string | undefined): UserAssi
     return buildCustomCategory(UI_TEXT.categories.custom);
   }
 
+  // Transitional compatibility for category values written before the lean
+  // assignable category set. The next simplification release can remove this
+  // once existing installs have loaded and rewritten their overrides.
   if (normalized === "meeting") {
     return "office";
   }

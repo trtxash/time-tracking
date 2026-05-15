@@ -36,6 +36,8 @@ export default function Settings({
     handleChange,
     cleanupRange,
     setCleanupRange,
+    restoreStrategy,
+    setRestoreStrategy,
     isCleaning,
     isExportingBackup,
     isRestoringBackup,
@@ -204,10 +206,12 @@ export default function Settings({
           <SettingsDataSafetyPanel
             cleanupRange={cleanupRange}
             cleanupOptions={cleanupOptions}
+            restoreStrategy={restoreStrategy}
             isCleaning={isCleaning}
             isExportingBackup={isExportingBackup}
             isRestoringBackup={isRestoringBackup}
             onCleanupRangeChange={setCleanupRange}
+            onRestoreStrategyChange={setRestoreStrategy}
             onCleanup={handleCleanup}
             onExportBackup={() => void handleExportBackup()}
             onRestoreBackup={() => void handleRestoreBackup()}

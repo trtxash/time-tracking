@@ -11,6 +11,7 @@ import {
   pickBackupSaveFile,
   previewBackup,
   restoreBackup,
+  type BackupRestoreStrategy,
   type BackupPreview,
 } from "../../../platform/backup/backupRuntimeGateway.ts";
 import { openExternalUrl } from "../../../platform/desktop/externalUrlGateway.ts";
@@ -23,7 +24,7 @@ import {
   clearSessionsByRangeWithDeps,
 } from "./sessionCleanupPolicy.ts";
 
-export type { BackupPreview } from "../../../platform/backup/backupRuntimeGateway.ts";
+export type { BackupPreview, BackupRestoreStrategy } from "../../../platform/backup/backupRuntimeGateway.ts";
 
 export interface BackupRestorePreparation {
   path: string;
@@ -148,8 +149,8 @@ export class SettingsRuntimeAdapterService {
     return prepareBackupRestoreWithDeps(initialPath, prepareBackupRestoreDeps);
   }
 
-  static async restoreBackup(path: string): Promise<void> {
-    await restoreBackup(path);
+  static async restoreBackup(path: string, restoreStrategy: BackupRestoreStrategy): Promise<void> {
+    await restoreBackup(path, restoreStrategy);
   }
 
   static async openReleaseNotes(): Promise<void> {

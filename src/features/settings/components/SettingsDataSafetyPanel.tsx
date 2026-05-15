@@ -1,20 +1,24 @@
-import { Database, RefreshCw, Trash2 } from "lucide-react";
+import { Database, FileArchive, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { UI_TEXT } from "../../../shared/copy/uiText.ts";
 import QuietDangerAction from "../../../shared/components/QuietDangerAction";
 import QuietSubpanel from "../../../shared/components/QuietSubpanel";
 import QuietActionRow from "../../../shared/components/QuietActionRow";
 import QuietSelect from "../../../shared/components/QuietSelect";
+import QuietSegmentedFilter from "../../../shared/components/QuietSegmentedFilter";
 import type { CleanupRange } from "../types";
+import type { BackupRestoreStrategy } from "../services/settingsRuntimeAdapterService.ts";
 
 type CleanupOption = { value: CleanupRange; label: string };
 
 type SettingsDataSafetyPanelProps = {
   cleanupRange: CleanupRange;
   cleanupOptions: CleanupOption[];
+  restoreStrategy: BackupRestoreStrategy;
   isCleaning: boolean;
   isExportingBackup: boolean;
   isRestoringBackup: boolean;
   onCleanupRangeChange: (value: CleanupRange) => void;
+  onRestoreStrategyChange: (value: BackupRestoreStrategy) => void;
   onCleanup: () => void;
   onExportBackup: () => void;
   onRestoreBackup: () => void;
@@ -23,70 +27,116 @@ type SettingsDataSafetyPanelProps = {
 export default function SettingsDataSafetyPanel({
   cleanupRange,
   cleanupOptions,
+  restoreStrategy,
   isCleaning,
   isExportingBackup,
   isRestoringBackup,
   onCleanupRangeChange,
+  onRestoreStrategyChange,
   onCleanup,
   onExportBackup,
   onRestoreBackup,
 }: SettingsDataSafetyPanelProps) {
+  const restoreStrategyOptions: Array<{ value: BackupRestoreStrategy; label: string }> = [
+    { value: "replace", label: UI_TEXT.settings.restoreStrategyOptions.replace },
+    { value: "merge", label: UI_TEXT.settings.restoreStrategyOptions.merge },
+  ];
+
   return (
     <section className="qp-panel p-5 md:p-6">
       <div className="mb-5 flex items-center gap-2.5 border-b border-[var(--qp-border-subtle)] pb-2">
-        <Database size={16} className="text-[var(--qp-danger)]" />
+        <Database size={16} className="text-[var(--qp-accent-default)]" />
         <h2 className="text-sm font-semibold text-[var(--qp-text-primary)]">{UI_TEXT.settings.dataSafetyTitle}</h2>
       </div>
 
       <div className="space-y-5">
         <QuietSubpanel>
-          <p className="text-sm font-semibold text-[var(--qp-text-primary)]">{UI_TEXT.settings.backupRestoreTitle}</p>
-          <p className="mt-1 text-sm text-[var(--qp-text-secondary)]">
-            {UI_TEXT.settings.backupRestoreHint}
-          </p>
+          <div>
+            <p className="text-sm font-semibold text-[var(--qp-text-primary)]">{UI_TEXT.settings.backupRestoreTitle}</p>
+            <p className="mt-1 text-sm leading-relaxed text-[var(--qp-text-secondary)]">
+              {UI_TEXT.settings.backupRestoreHint}
+            </p>
+          </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <QuietActionRow className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-[var(--qp-text-primary)]">{UI_TEXT.settings.backupExportTitle}</p>
-                <p className="mt-0.5 text-xs text-[var(--qp-text-tertiary)]">{UI_TEXT.settings.backupExportHint}</p>
+          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[2fr_2fr_3fr]">
+            <QuietActionRow>
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <FileArchive size={14} className="text-[var(--qp-text-tertiary)]" />
+                    <p className="text-sm font-semibold text-[var(--qp-text-primary)]">
+                      {UI_TEXT.settings.backupExportTitle}
+                    </p>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--qp-text-tertiary)]">
+                    {UI_TEXT.settings.backupExportHint}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onExportBackup}
+                  disabled={isExportingBackup || isRestoringBackup}
+                  className="qp-button-secondary shrink-0 rounded-[7px] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--qp-text-secondary)] disabled:opacity-50"
+                >
+                  {isExportingBackup ? UI_TEXT.settings.backupExporting : UI_TEXT.settings.backupExportAction}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={onExportBackup}
-                disabled={isExportingBackup || isRestoringBackup}
-                className="qp-button-secondary rounded-[8px] px-3 py-2 text-xs font-semibold text-[var(--qp-text-secondary)] disabled:opacity-50"
-              >
-                {isExportingBackup ? UI_TEXT.settings.backupExporting : UI_TEXT.settings.backupExportAction}
-              </button>
             </QuietActionRow>
 
-            <QuietActionRow className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-[var(--qp-text-primary)]">
-                  {UI_TEXT.settings.backupRestoreActionTitle}
-                </p>
-                <p className="mt-0.5 text-xs text-[var(--qp-text-tertiary)]">
-                  {UI_TEXT.settings.backupRestoreActionHint}
-                </p>
+            <QuietActionRow>
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <RotateCcw size={14} className="text-[var(--qp-text-tertiary)]" />
+                    <p className="text-sm font-semibold text-[var(--qp-text-primary)]">
+                      {UI_TEXT.settings.backupRestoreActionTitle}
+                    </p>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--qp-text-tertiary)]">
+                    {UI_TEXT.settings.backupRestoreActionHint}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onRestoreBackup}
+                  disabled={isExportingBackup || isRestoringBackup}
+                  className="qp-button-secondary shrink-0 rounded-[7px] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--qp-text-secondary)] disabled:opacity-50"
+                >
+                  {isRestoringBackup ? UI_TEXT.settings.backupRestoring : UI_TEXT.settings.backupRestoreAction}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={onRestoreBackup}
-                disabled={isExportingBackup || isRestoringBackup}
-                className="qp-button-secondary rounded-[8px] px-3 py-2 text-xs font-semibold text-[var(--qp-text-secondary)] disabled:opacity-50"
-              >
-                {isRestoringBackup ? UI_TEXT.settings.backupRestoring : UI_TEXT.settings.backupRestoreAction}
-              </button>
+            </QuietActionRow>
+
+            <QuietActionRow>
+              <div className="flex items-end justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[var(--qp-text-primary)]">
+                    {UI_TEXT.settings.restoreStrategyLabel}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--qp-text-tertiary)]">
+                    {UI_TEXT.settings.restoreStrategyHint}
+                  </p>
+                </div>
+                <QuietSegmentedFilter
+                  value={restoreStrategy}
+                  options={restoreStrategyOptions}
+                  onChange={onRestoreStrategyChange}
+                  className="shrink-0"
+                />
+              </div>
             </QuietActionRow>
           </div>
         </QuietSubpanel>
 
-        <QuietSubpanel tone="danger">
-          <p className="text-sm font-semibold text-[var(--qp-text-primary)]">{UI_TEXT.settings.cleanupTitle}</p>
-          <p className="mt-1 text-sm text-[var(--qp-text-secondary)]">{UI_TEXT.settings.cleanupHint}</p>
+        <QuietSubpanel tone="danger" className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[var(--qp-text-primary)]">{UI_TEXT.settings.cleanupTitle}</p>
+            <p className="mt-1 text-sm leading-relaxed text-[var(--qp-text-secondary)]">
+              {UI_TEXT.settings.cleanupHint}
+            </p>
+          </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="flex shrink-0 flex-wrap items-center gap-3 md:justify-end">
             <QuietSelect
               value={cleanupRange}
               onChange={(value) => onCleanupRangeChange(value as CleanupRange)}

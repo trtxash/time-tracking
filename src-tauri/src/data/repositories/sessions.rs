@@ -67,6 +67,53 @@ pub async fn insert_for_restore(
     Ok(())
 }
 
+pub async fn insert_missing_for_restore(
+    tx: &mut Transaction<'_, Sqlite>,
+    sessions: &[BackupSession],
+) -> Result<(), String> {
+    for session in sessions {
+        sqlx::query(
+            "INSERT INTO sessions (
+               app_name, exe_name, window_title, start_time, end_time, duration,
+               continuity_group_start_time
+             )
+             SELECT ?, ?, ?, ?, ?, ?, ?
+             WHERE NOT EXISTS (
+               SELECT 1
+               FROM sessions
+               WHERE app_name = ?
+                 AND exe_name = ?
+                 AND COALESCE(window_title, '') = COALESCE(?, '')
+                 AND start_time = ?
+                 AND COALESCE(end_time, -1) = COALESCE(?, -1)
+                 AND COALESCE(duration, -1) = COALESCE(?, -1)
+             )",
+        )
+        .bind(&session.app_name)
+        .bind(&session.exe_name)
+        .bind(&session.window_title)
+        .bind(session.start_time)
+        .bind(session.end_time)
+        .bind(session.duration)
+        .bind(
+            session
+                .continuity_group_start_time
+                .unwrap_or(session.start_time),
+        )
+        .bind(&session.app_name)
+        .bind(&session.exe_name)
+        .bind(&session.window_title)
+        .bind(session.start_time)
+        .bind(session.end_time)
+        .bind(session.duration)
+        .execute(&mut **tx)
+        .await
+        .map_err(|error| format!("failed to merge restore sessions: {error}"))?;
+    }
+
+    Ok(())
+}
+
 pub async fn normalize_closed_session_durations(pool: &Pool<Sqlite>) -> Result<u64, sqlx::Error> {
     let result = sqlx::query(
         "UPDATE sessions

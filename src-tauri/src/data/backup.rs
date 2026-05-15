@@ -1,14 +1,58 @@
 use crate::data::repositories;
 use crate::data::sqlite_pool::wait_for_sqlite_pool;
 use crate::domain::backup::{
-    BackupMeta, BackupPayload, BackupPreview, CURRENT_BACKUP_SCHEMA_VERSION, CURRENT_BACKUP_VERSION,
+    BackupIconCache, BackupMeta, BackupPayload, BackupPreview, BackupSession, BackupSetting,
+    CURRENT_BACKUP_SCHEMA_VERSION, CURRENT_BACKUP_VERSION,
 };
+use crc32fast::Hasher;
+use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
+use std::collections::BTreeMap;
 use std::fs;
+use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, Runtime};
+use zip::write::SimpleFileOptions;
+use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
-const BACKUP_FILE_EXT: &str = "ttbackup.json";
+const BACKUP_FILE_EXT: &str = "zip";
+const BACKUP_JSON_ENTRY_NAME: &str = "backup.json";
+const BACKUP_MANIFEST_ENTRY_NAME: &str = "manifest.json";
+const BACKUP_CHECKSUMS_ENTRY_NAME: &str = "checksums.json";
+const BACKUP_SESSIONS_ENTRY_NAME: &str = "data/sessions.json";
+const BACKUP_SETTINGS_ENTRY_NAME: &str = "data/settings.json";
+const BACKUP_ICON_CACHE_ENTRY_NAME: &str = "data/icon_cache.json";
+
+#[derive(Debug, Serialize, Deserialize)]
+struct BackupArchiveManifest {
+    format: String,
+    backup_version: u32,
+    exported_at_ms: u64,
+    schema_version: u32,
+    app_version: String,
+    files: BackupArchiveFiles,
+    counts: BackupArchiveCounts,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct BackupArchiveFiles {
+    sessions: String,
+    settings: String,
+    icon_cache: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct BackupArchiveCounts {
+    sessions: usize,
+    settings: usize,
+    icon_cache: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct BackupArchiveChecksums {
+    algorithm: String,
+    files: BTreeMap<String, String>,
+}
 
 fn default_backup_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
     let app_data_dir = app
@@ -19,13 +63,16 @@ fn default_backup_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String
     fs::create_dir_all(&backup_dir)
         .map_err(|error| format!("failed to create backup dir: {error}"))?;
 
-    let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-    Ok(backup_dir.join(format!("time-tracker-backup-{timestamp}.{BACKUP_FILE_EXT}")))
+    Ok(backup_dir.join(backup_file_name()))
 }
 
 fn backup_file_name() -> String {
-    let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-    format!("time-tracker-backup-{timestamp}.{BACKUP_FILE_EXT}")
+    let date = chrono::Local::now().format("%Y%m%d").to_string();
+    backup_file_name_for_date(&date)
+}
+
+fn backup_file_name_for_date(date: &str) -> String {
+    format!("TimeTracker-backup-{date}.{BACKUP_FILE_EXT}")
 }
 
 fn resolve_backup_path<R: Runtime>(
@@ -105,7 +152,7 @@ fn resolve_dialog_directory(initial_path: Option<String>) -> Option<PathBuf> {
 }
 
 pub fn pick_backup_save_file(initial_path: Option<String>) -> Option<String> {
-    let mut dialog = rfd::FileDialog::new().add_filter("Backup files", &["json", "ttbackup"]);
+    let mut dialog = rfd::FileDialog::new().add_filter("Time Tracker backup", &["zip"]);
     if let Some(dir) = resolve_dialog_directory(initial_path) {
         dialog = dialog.set_directory(dir);
     }
@@ -117,7 +164,9 @@ pub fn pick_backup_save_file(initial_path: Option<String>) -> Option<String> {
 }
 
 pub fn pick_backup_file(initial_path: Option<String>) -> Option<String> {
-    let mut dialog = rfd::FileDialog::new().add_filter("Backup files", &["json", "ttbackup"]);
+    let mut dialog = rfd::FileDialog::new()
+        .add_filter("Time Tracker backup", &["zip"])
+        .add_filter("Legacy backup files", &["json", "ttbackup"]);
     if let Some(dir) = resolve_dialog_directory(initial_path) {
         dialog = dialog.set_directory(dir);
     }
@@ -125,6 +174,14 @@ pub fn pick_backup_file(initial_path: Option<String>) -> Option<String> {
     dialog
         .pick_file()
         .map(|path| path.to_string_lossy().to_string())
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RestoreStrategy {
+    #[default]
+    Replace,
+    Merge,
 }
 
 fn decode_backup_payload(raw_json: &str, source_path: &Path) -> Result<BackupPayload, String> {
@@ -138,56 +195,312 @@ fn decode_backup_payload(raw_json: &str, source_path: &Path) -> Result<BackupPay
     Ok(payload)
 }
 
-pub async fn export_backup(backup_path: Option<String>, app: AppHandle) -> Result<String, String> {
-    let payload = load_backup_payload(&app).await?;
-    let target_path = resolve_backup_path(&app, backup_path)?;
-
-    let serialized = serde_json::to_string_pretty(&payload)
-        .map_err(|error| format!("failed to serialize backup payload: {error}"))?;
-    fs::write(&target_path, serialized)
-        .map_err(|error| format!("failed to write backup file: {error}"))?;
-
-    Ok(target_path.to_string_lossy().to_string())
+fn build_backup_manifest(payload: &BackupPayload) -> BackupArchiveManifest {
+    BackupArchiveManifest {
+        format: "TimeTrackerBackup".to_string(),
+        backup_version: payload.version,
+        exported_at_ms: payload.meta.exported_at_ms,
+        schema_version: payload.meta.schema_version,
+        app_version: payload.meta.app_version.clone(),
+        files: BackupArchiveFiles {
+            sessions: BACKUP_SESSIONS_ENTRY_NAME.to_string(),
+            settings: BACKUP_SETTINGS_ENTRY_NAME.to_string(),
+            icon_cache: BACKUP_ICON_CACHE_ENTRY_NAME.to_string(),
+        },
+        counts: BackupArchiveCounts {
+            sessions: payload.sessions.len(),
+            settings: payload.settings.len(),
+            icon_cache: payload.icon_cache.len(),
+        },
+    }
 }
 
-pub async fn restore_backup(backup_path: String, app: AppHandle) -> Result<(), String> {
-    let backup_path = PathBuf::from(backup_path.trim());
-    if backup_path.as_os_str().is_empty() {
-        return Err("backup path cannot be empty".to_string());
+fn serialize_pretty<T: Serialize>(value: &T, label: &str) -> Result<String, String> {
+    serde_json::to_string_pretty(value)
+        .map_err(|error| format!("failed to serialize backup {label}: {error}"))
+}
+
+fn checksum(value: &str) -> String {
+    let mut hasher = Hasher::new();
+    hasher.update(value.as_bytes());
+    format!("{:08x}", hasher.finalize())
+}
+
+fn zip_start_file(
+    archive: &mut ZipWriter<Cursor<Vec<u8>>>,
+    name: &str,
+    options: SimpleFileOptions,
+) -> Result<(), String> {
+    archive
+        .start_file(name, options)
+        .map_err(|error| format!("failed to start backup archive entry `{name}`: {error}"))
+}
+
+fn zip_write_file(
+    archive: &mut ZipWriter<Cursor<Vec<u8>>>,
+    name: &str,
+    content: &str,
+    options: SimpleFileOptions,
+) -> Result<(), String> {
+    zip_start_file(archive, name, options)?;
+    archive
+        .write_all(content.as_bytes())
+        .map_err(|error| format!("failed to write backup archive entry `{name}`: {error}"))
+}
+
+fn encode_backup_archive(payload: &BackupPayload) -> Result<Vec<u8>, String> {
+    let manifest = build_backup_manifest(payload);
+    let sessions = serialize_pretty(&payload.sessions, "sessions")?;
+    let settings = serialize_pretty(&payload.settings, "settings")?;
+    let icon_cache = serialize_pretty(&payload.icon_cache, "icon cache")?;
+    let manifest_json = serialize_pretty(&manifest, "manifest")?;
+
+    let mut checksum_files = BTreeMap::new();
+    checksum_files.insert(
+        BACKUP_MANIFEST_ENTRY_NAME.to_string(),
+        checksum(&manifest_json),
+    );
+    checksum_files.insert(BACKUP_SESSIONS_ENTRY_NAME.to_string(), checksum(&sessions));
+    checksum_files.insert(BACKUP_SETTINGS_ENTRY_NAME.to_string(), checksum(&settings));
+    checksum_files.insert(
+        BACKUP_ICON_CACHE_ENTRY_NAME.to_string(),
+        checksum(&icon_cache),
+    );
+    let checksums = BackupArchiveChecksums {
+        algorithm: "crc32".to_string(),
+        files: checksum_files,
+    };
+    let checksums_json = serialize_pretty(&checksums, "checksums")?;
+
+    let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    zip_write_file(
+        &mut archive,
+        BACKUP_MANIFEST_ENTRY_NAME,
+        &manifest_json,
+        options,
+    )?;
+    zip_write_file(&mut archive, BACKUP_SESSIONS_ENTRY_NAME, &sessions, options)?;
+    zip_write_file(&mut archive, BACKUP_SETTINGS_ENTRY_NAME, &settings, options)?;
+    zip_write_file(
+        &mut archive,
+        BACKUP_ICON_CACHE_ENTRY_NAME,
+        &icon_cache,
+        options,
+    )?;
+    zip_write_file(
+        &mut archive,
+        BACKUP_CHECKSUMS_ENTRY_NAME,
+        &checksums_json,
+        options,
+    )?;
+
+    let buffer = archive
+        .finish()
+        .map_err(|error| format!("failed to finish backup archive: {error}"))?
+        .into_inner();
+    Ok(buffer)
+}
+
+fn read_zip_entry(
+    archive: &mut ZipArchive<Cursor<Vec<u8>>>,
+    entry_name: &str,
+    backup_path: &Path,
+) -> Result<String, String> {
+    let mut entry = archive.by_name(entry_name).map_err(|error| {
+        format!(
+            "backup archive `{}` does not contain {entry_name}: {error}",
+            backup_path.display()
+        )
+    })?;
+    let mut content = String::new();
+    entry.read_to_string(&mut content).map_err(|error| {
+        format!(
+            "failed to read backup archive entry `{entry_name}` from `{}`: {error}",
+            backup_path.display()
+        )
+    })?;
+    Ok(content)
+}
+
+fn parse_json<T: for<'de> Deserialize<'de>>(
+    raw_json: &str,
+    source_path: &Path,
+    label: &str,
+) -> Result<T, String> {
+    serde_json::from_str::<T>(raw_json).map_err(|error| {
+        format!(
+            "failed to parse backup {label} from `{}`: {error}",
+            source_path.display()
+        )
+    })
+}
+
+fn verify_backup_checksums(
+    checksums: &BackupArchiveChecksums,
+    entries: &[(&str, &str)],
+    backup_path: &Path,
+) -> Result<(), String> {
+    if checksums.algorithm != "crc32" {
+        return Err(format!(
+            "backup archive `{}` uses unsupported checksum algorithm `{}`",
+            backup_path.display(),
+            checksums.algorithm
+        ));
     }
 
-    let raw_json = fs::read_to_string(&backup_path).map_err(|error| {
+    for (entry_name, content) in entries {
+        let Some(expected) = checksums.files.get(*entry_name) else {
+            return Err(format!(
+                "backup archive `{}` is missing checksum for {entry_name}",
+                backup_path.display()
+            ));
+        };
+        let actual = checksum(content);
+        if expected != &actual {
+            return Err(format!(
+                "backup archive `{}` checksum mismatch for {entry_name}",
+                backup_path.display()
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn decode_structured_backup_archive(
+    archive: &mut ZipArchive<Cursor<Vec<u8>>>,
+    backup_path: &Path,
+) -> Result<BackupPayload, String> {
+    let manifest_json = read_zip_entry(archive, BACKUP_MANIFEST_ENTRY_NAME, backup_path)?;
+    let sessions_json = read_zip_entry(archive, BACKUP_SESSIONS_ENTRY_NAME, backup_path)?;
+    let settings_json = read_zip_entry(archive, BACKUP_SETTINGS_ENTRY_NAME, backup_path)?;
+    let icon_cache_json = read_zip_entry(archive, BACKUP_ICON_CACHE_ENTRY_NAME, backup_path)?;
+    let checksums_json = read_zip_entry(archive, BACKUP_CHECKSUMS_ENTRY_NAME, backup_path)?;
+
+    let checksums =
+        parse_json::<BackupArchiveChecksums>(&checksums_json, backup_path, "checksums")?;
+    verify_backup_checksums(
+        &checksums,
+        &[
+            (BACKUP_MANIFEST_ENTRY_NAME, &manifest_json),
+            (BACKUP_SESSIONS_ENTRY_NAME, &sessions_json),
+            (BACKUP_SETTINGS_ENTRY_NAME, &settings_json),
+            (BACKUP_ICON_CACHE_ENTRY_NAME, &icon_cache_json),
+        ],
+        backup_path,
+    )?;
+
+    let manifest = parse_json::<BackupArchiveManifest>(&manifest_json, backup_path, "manifest")?;
+    let sessions = parse_json::<Vec<BackupSession>>(&sessions_json, backup_path, "sessions")?;
+    let settings = parse_json::<Vec<BackupSetting>>(&settings_json, backup_path, "settings")?;
+    let icon_cache =
+        parse_json::<Vec<BackupIconCache>>(&icon_cache_json, backup_path, "icon cache")?;
+
+    Ok(BackupPayload {
+        version: manifest.backup_version,
+        meta: BackupMeta {
+            exported_at_ms: manifest.exported_at_ms,
+            schema_version: manifest.schema_version,
+            app_version: manifest.app_version,
+        },
+        sessions,
+        settings,
+        icon_cache,
+    })
+}
+
+fn read_backup_payload(backup_path: &Path) -> Result<BackupPayload, String> {
+    let raw_bytes = fs::read(backup_path).map_err(|error| {
         format!(
             "failed to read backup file `{}`: {error}",
             backup_path.display()
         )
     })?;
-    let payload = decode_backup_payload(&raw_json, &backup_path)?;
+
+    if raw_bytes.starts_with(b"PK") {
+        let mut archive = ZipArchive::new(Cursor::new(raw_bytes)).map_err(|error| {
+            format!(
+                "failed to read backup archive `{}`: {error}",
+                backup_path.display()
+            )
+        })?;
+
+        if archive.by_name(BACKUP_MANIFEST_ENTRY_NAME).is_ok() {
+            return decode_structured_backup_archive(&mut archive, backup_path);
+        }
+
+        let raw_json = read_zip_entry(&mut archive, BACKUP_JSON_ENTRY_NAME, backup_path)?;
+        return decode_backup_payload(&raw_json, backup_path);
+    }
+
+    let raw_json = String::from_utf8(raw_bytes).map_err(|error| {
+        format!(
+            "failed to decode backup file `{}` as UTF-8: {error}",
+            backup_path.display()
+        )
+    })?;
+    decode_backup_payload(&raw_json, backup_path)
+}
+
+pub async fn export_backup(backup_path: Option<String>, app: AppHandle) -> Result<String, String> {
+    let payload = load_backup_payload(&app).await?;
+    let target_path = resolve_backup_path(&app, backup_path)?;
+
+    let archive = encode_backup_archive(&payload)?;
+    fs::write(&target_path, archive)
+        .map_err(|error| format!("failed to write backup file: {error}"))?;
+
+    Ok(target_path.to_string_lossy().to_string())
+}
+
+pub async fn restore_backup(
+    backup_path: String,
+    app: AppHandle,
+    strategy: RestoreStrategy,
+) -> Result<(), String> {
+    let backup_path = PathBuf::from(backup_path.trim());
+    if backup_path.as_os_str().is_empty() {
+        return Err("backup path cannot be empty".to_string());
+    }
+
+    let payload = read_backup_payload(&backup_path)?;
     let compatibility = payload.compatibility();
     if !compatibility.supported {
         return Err(compatibility.message);
     }
 
     let pool = wait_for_sqlite_pool(&app).await?;
-    restore_backup_payload(&pool, &payload).await?;
+    restore_backup_payload(&pool, &payload, strategy).await?;
     Ok(())
 }
 
 async fn restore_backup_payload(
     pool: &Pool<Sqlite>,
     payload: &BackupPayload,
+    strategy: RestoreStrategy,
 ) -> Result<(), String> {
     let mut tx = pool
         .begin()
         .await
         .map_err(|error| format!("failed to start restore transaction: {error}"))?;
-    repositories::sessions::clear_for_restore(&mut tx).await?;
-    repositories::settings::clear_for_restore(&mut tx).await?;
-    repositories::icon_cache::clear_for_restore(&mut tx).await?;
+    match strategy {
+        RestoreStrategy::Replace => {
+            repositories::sessions::clear_for_restore(&mut tx).await?;
+            repositories::settings::clear_for_restore(&mut tx).await?;
+            repositories::icon_cache::clear_for_restore(&mut tx).await?;
 
-    repositories::sessions::insert_for_restore(&mut tx, &payload.sessions).await?;
-    repositories::settings::insert_for_restore(&mut tx, &payload.settings).await?;
-    repositories::icon_cache::insert_for_restore(&mut tx, &payload.icon_cache).await?;
+            repositories::sessions::insert_for_restore(&mut tx, &payload.sessions).await?;
+            repositories::settings::insert_for_restore(&mut tx, &payload.settings).await?;
+            repositories::icon_cache::insert_for_restore(&mut tx, &payload.icon_cache).await?;
+        }
+        RestoreStrategy::Merge => {
+            repositories::sessions::insert_missing_for_restore(&mut tx, &payload.sessions).await?;
+            repositories::settings::insert_missing_for_restore(&mut tx, &payload.settings).await?;
+            repositories::icon_cache::insert_missing_for_restore(&mut tx, &payload.icon_cache)
+                .await?;
+        }
+    }
 
     tx.commit()
         .await
@@ -201,13 +514,7 @@ pub async fn preview_backup(backup_path: String) -> Result<BackupPreview, String
         return Err("backup path cannot be empty".to_string());
     }
 
-    let raw_json = fs::read_to_string(&backup_path).map_err(|error| {
-        format!(
-            "failed to read backup file `{}`: {error}",
-            backup_path.display()
-        )
-    })?;
-    let payload = decode_backup_payload(&raw_json, &backup_path)?;
+    let payload = read_backup_payload(&backup_path)?;
 
     Ok(payload.preview())
 }
@@ -218,6 +525,93 @@ mod tests {
     use crate::data::migrations as db_schema;
     use crate::domain::backup::{BackupIconCache, BackupSession, BackupSetting};
     use sqlx::{Executor, SqlitePool};
+
+    #[test]
+    fn backup_file_name_uses_requested_zip_format() {
+        assert_eq!(
+            backup_file_name_for_date("20260515"),
+            "TimeTracker-backup-20260515.zip"
+        );
+    }
+
+    #[test]
+    fn backup_archive_uses_manifest_data_and_checksums_layout() {
+        let payload = BackupPayload {
+            version: CURRENT_BACKUP_VERSION,
+            meta: BackupMeta {
+                exported_at_ms: 1_714_000_000_000,
+                schema_version: CURRENT_BACKUP_SCHEMA_VERSION,
+                app_version: "test".to_string(),
+            },
+            sessions: vec![BackupSession {
+                id: 1,
+                app_name: "App".to_string(),
+                exe_name: "app.exe".to_string(),
+                window_title: Some("Window".to_string()),
+                start_time: 10,
+                end_time: Some(20),
+                duration: Some(10),
+                continuity_group_start_time: Some(10),
+            }],
+            settings: vec![BackupSetting {
+                key: "language".to_string(),
+                value: "zh-CN".to_string(),
+            }],
+            icon_cache: vec![BackupIconCache {
+                exe_name: "app.exe".to_string(),
+                icon_base64: "aWNvbg==".to_string(),
+                last_updated: Some(30),
+            }],
+        };
+
+        let archive = encode_backup_archive(&payload).unwrap();
+        let mut zip = ZipArchive::new(Cursor::new(archive)).unwrap();
+        assert!(zip.by_name(BACKUP_MANIFEST_ENTRY_NAME).is_ok());
+        assert!(zip.by_name(BACKUP_SESSIONS_ENTRY_NAME).is_ok());
+        assert!(zip.by_name(BACKUP_SETTINGS_ENTRY_NAME).is_ok());
+        assert!(zip.by_name(BACKUP_ICON_CACHE_ENTRY_NAME).is_ok());
+        assert!(zip.by_name(BACKUP_CHECKSUMS_ENTRY_NAME).is_ok());
+    }
+
+    #[test]
+    fn structured_backup_archive_round_trips_payload() {
+        let payload = BackupPayload {
+            version: CURRENT_BACKUP_VERSION,
+            meta: BackupMeta {
+                exported_at_ms: 1_714_000_000_000,
+                schema_version: CURRENT_BACKUP_SCHEMA_VERSION,
+                app_version: "test".to_string(),
+            },
+            sessions: vec![BackupSession {
+                id: 1,
+                app_name: "App".to_string(),
+                exe_name: "app.exe".to_string(),
+                window_title: Some("Window".to_string()),
+                start_time: 10,
+                end_time: Some(20),
+                duration: Some(10),
+                continuity_group_start_time: Some(10),
+            }],
+            settings: vec![BackupSetting {
+                key: "language".to_string(),
+                value: "zh-CN".to_string(),
+            }],
+            icon_cache: vec![BackupIconCache {
+                exe_name: "app.exe".to_string(),
+                icon_base64: "aWNvbg==".to_string(),
+                last_updated: Some(30),
+            }],
+        };
+
+        let archive = encode_backup_archive(&payload).unwrap();
+        let mut zip = ZipArchive::new(Cursor::new(archive)).unwrap();
+        let decoded = decode_structured_backup_archive(&mut zip, Path::new("backup.zip")).unwrap();
+        assert_eq!(decoded.version, payload.version);
+        assert_eq!(decoded.meta.exported_at_ms, payload.meta.exported_at_ms);
+        assert_eq!(decoded.sessions.len(), 1);
+        assert_eq!(decoded.settings.len(), 1);
+        assert_eq!(decoded.icon_cache.len(), 1);
+    }
 
     async fn setup_test_db() -> SqlitePool {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
@@ -289,7 +683,8 @@ mod tests {
                 }],
             };
 
-            let result = restore_backup_payload(&pool, &bad_payload).await;
+            let result =
+                restore_backup_payload(&pool, &bad_payload, RestoreStrategy::Replace).await;
             assert!(result.is_err());
             assert!(
                 result.unwrap_err().contains("failed to restore settings"),
@@ -320,6 +715,122 @@ mod tests {
                 "original setting should be preserved"
             );
             assert_eq!(icon_count, 1, "original icon cache should be preserved");
+        });
+    }
+
+    #[test]
+    fn merge_restore_payload_preserves_existing_data_and_imports_missing_data() {
+        tauri::async_runtime::block_on(async {
+            let pool = setup_test_db().await;
+
+            sqlx::query(
+                "INSERT INTO sessions (app_name, exe_name, window_title, start_time, end_time, duration, continuity_group_start_time)
+                 VALUES ('Existing App', 'existing.exe', 'Existing Window', 1000, 2000, 1000, 1000)",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+            sqlx::query("INSERT INTO settings (key, value) VALUES ('language', 'zh-CN')")
+                .execute(&pool)
+                .await
+                .unwrap();
+            sqlx::query(
+                "INSERT INTO icon_cache (exe_name, icon_base64, last_updated)
+                 VALUES ('existing.exe', 'old', 1)",
+            )
+            .execute(&pool)
+            .await
+            .unwrap();
+
+            let payload = BackupPayload {
+                version: CURRENT_BACKUP_VERSION,
+                meta: BackupMeta {
+                    exported_at_ms: 1,
+                    schema_version: CURRENT_BACKUP_SCHEMA_VERSION,
+                    app_version: "test".to_string(),
+                },
+                sessions: vec![
+                    BackupSession {
+                        id: 1,
+                        app_name: "Existing App".to_string(),
+                        exe_name: "existing.exe".to_string(),
+                        window_title: Some("Existing Window".to_string()),
+                        start_time: 1000,
+                        end_time: Some(2000),
+                        duration: Some(1000),
+                        continuity_group_start_time: Some(1000),
+                    },
+                    BackupSession {
+                        id: 2,
+                        app_name: "Imported App".to_string(),
+                        exe_name: "imported.exe".to_string(),
+                        window_title: Some("Imported Window".to_string()),
+                        start_time: 3000,
+                        end_time: Some(4000),
+                        duration: Some(1000),
+                        continuity_group_start_time: Some(3000),
+                    },
+                ],
+                settings: vec![
+                    BackupSetting {
+                        key: "language".to_string(),
+                        value: "en-US".to_string(),
+                    },
+                    BackupSetting {
+                        key: "theme_mode".to_string(),
+                        value: "dark".to_string(),
+                    },
+                ],
+                icon_cache: vec![
+                    BackupIconCache {
+                        exe_name: "existing.exe".to_string(),
+                        icon_base64: "new".to_string(),
+                        last_updated: Some(2),
+                    },
+                    BackupIconCache {
+                        exe_name: "imported.exe".to_string(),
+                        icon_base64: "imported".to_string(),
+                        last_updated: Some(3),
+                    },
+                ],
+            };
+
+            restore_backup_payload(&pool, &payload, RestoreStrategy::Merge)
+                .await
+                .unwrap();
+
+            let session_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+            let language: String =
+                sqlx::query_scalar("SELECT value FROM settings WHERE key = 'language'")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            let theme_mode: String =
+                sqlx::query_scalar("SELECT value FROM settings WHERE key = 'theme_mode'")
+                    .fetch_one(&pool)
+                    .await
+                    .unwrap();
+            let existing_icon: String = sqlx::query_scalar(
+                "SELECT icon_base64 FROM icon_cache WHERE exe_name = 'existing.exe'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+            let imported_icon: String = sqlx::query_scalar(
+                "SELECT icon_base64 FROM icon_cache WHERE exe_name = 'imported.exe'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+            assert_eq!(session_count, 2);
+            assert_eq!(language, "zh-CN");
+            assert_eq!(theme_mode, "dark");
+            assert_eq!(existing_icon, "old");
+            assert_eq!(imported_icon, "imported");
         });
     }
 }

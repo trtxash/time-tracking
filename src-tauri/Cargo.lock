@@ -5156,10 +5156,11 @@ dependencies = [
 
 [[package]]
 name = "time_tracker"
-version = "0.6.4"
+version = "0.6.5"
 dependencies = [
  "base64 0.22.1",
  "chrono",
+ "crc32fast",
  "image",
  "rfd",
  "serde",
@@ -5174,6 +5175,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tokio",
  "windows 0.62.2",
+ "zip",
 ]
 
 [[package]]

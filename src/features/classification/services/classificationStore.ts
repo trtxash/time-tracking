@@ -13,14 +13,14 @@ import {
   commitClassificationSettingMutations,
   type ClassificationSettingMutation,
 } from "../../../platform/persistence/classificationSettingsGateway.ts";
-import { ProcessMapper, type AppOverride } from "./ProcessMapper.ts";
+import { ProcessMapper, type AppOverride } from "../../../shared/classification/processMapper.ts";
 import {
   isAppCategory,
   isCustomCategory,
   type AppCategory,
   type CustomAppCategory,
-} from "../config/categoryTokens.ts";
-import { resolveCanonicalExecutable, shouldTrackProcess } from "./processNormalization.ts";
+} from "../../../shared/classification/categoryTokens.ts";
+import { resolveCanonicalExecutable, shouldTrackProcess } from "../../../shared/classification/processNormalization.ts";
 import type { ClassificationDraftChangePlan } from "./classificationDraftState.ts";
 
 const APP_OVERRIDE_KEY_PREFIX = "__app_override::";
@@ -45,6 +45,12 @@ export interface ObservedAppCandidate {
 
 type DeleteAppSessionScope = "today" | "all";
 
+export interface AppOverrideTransitionResult {
+  canonicalExe: string | null;
+  override: AppOverride | null;
+  mutations: ClassificationSettingMutation[];
+}
+
 function isPersistableDeletedCategory(category: string): category is AppCategory {
   return isAppCategory(category)
     && !isCustomCategory(category)
@@ -68,16 +74,48 @@ export async function loadAppOverrides(): Promise<Record<string, AppOverride>> {
   const rows = await loadSettingRowsByKeyPrefix(APP_OVERRIDE_KEY_PREFIX);
 
   const overrides: Record<string, AppOverride> = {};
+  const transitionMutations: ClassificationSettingMutation[] = [];
   for (const row of rows) {
-    const canonicalExe = resolveCanonicalExecutable(row.key.slice(APP_OVERRIDE_KEY_PREFIX.length));
-    if (!canonicalExe) continue;
-
-    const parsed = ProcessMapper.fromOverrideStorageValue(row.value);
-    if (!parsed) continue;
-    overrides[canonicalExe] = parsed;
+    const result = buildAppOverrideTransition(row.key, row.value);
+    if (!result.canonicalExe || !result.override) continue;
+    overrides[result.canonicalExe] = result.override;
+    transitionMutations.push(...result.mutations);
   }
 
+  await commitClassificationSettingMutations(transitionMutations);
+
   return overrides;
+}
+
+export function buildAppOverrideTransition(
+  key: string,
+  value: string,
+): AppOverrideTransitionResult {
+  const canonicalExe = resolveCanonicalExecutable(key.slice(APP_OVERRIDE_KEY_PREFIX.length));
+  if (!canonicalExe) {
+    return { canonicalExe: null, override: null, mutations: [] };
+  }
+
+  const parsed = ProcessMapper.fromOverrideStorageValue(value);
+  if (!parsed) {
+    return { canonicalExe, override: null, mutations: [] };
+  }
+
+  const canonicalKey = `${APP_OVERRIDE_KEY_PREFIX}${canonicalExe}`;
+  const normalizedValue = ProcessMapper.toOverrideStorageValue(parsed);
+  const mutations: ClassificationSettingMutation[] = [];
+  if (key !== canonicalKey) {
+    mutations.push({ key, value: null });
+  }
+  if (key !== canonicalKey || value !== normalizedValue) {
+    mutations.push({ key: canonicalKey, value: normalizedValue });
+  }
+
+  return {
+    canonicalExe,
+    override: parsed,
+    mutations,
+  };
 }
 
 export async function saveAppOverride(exeName: string, override: AppOverride | null): Promise<void> {

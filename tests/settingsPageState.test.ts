@@ -10,7 +10,10 @@ import {
   runBackupRestoreFlow,
   runSettingsCleanupFlow,
 } from "../src/features/settings/services/settingsPageActions.ts";
-import { normalizeSettingsRecord } from "../src/platform/persistence/appSettingsStore.ts";
+import {
+  buildAppSettingsTransitionPatch,
+  normalizeSettingsRecord,
+} from "../src/platform/persistence/appSettingsStore.ts";
 
 interface AppSettings {
   idleTimeoutSecs: number;
@@ -366,6 +369,30 @@ await runTest("normalizeSettingsRecord accepts color schemes and falls back to d
   );
 });
 
+await runTest("buildAppSettingsTransitionPatch writes current fields for legacy settings", () => {
+  assert.deepEqual(
+    buildAppSettingsTransitionPatch({
+      color_scheme: "github",
+      minimize_behavior: "tray",
+    }),
+    {
+      color_scheme_light: "github",
+      color_scheme_dark: "github",
+      minimize_behavior: "taskbar",
+    },
+  );
+
+  assert.deepEqual(
+    buildAppSettingsTransitionPatch({
+      color_scheme: "nord",
+      color_scheme_light: "linear",
+      color_scheme_dark: "nord",
+      minimize_behavior: "widget",
+    }),
+    {},
+  );
+});
+
 await runTest("runSettingsCleanupFlow executes confirmed cleanup and reloads", async () => {
   const events: string[] = [];
   const cleanupRange: CleanupRange = 30;
@@ -497,6 +524,7 @@ await runTest("runBackupRestoreFlow blocks incompatible backups before confirmat
 
   const result = await runBackupRestoreFlow({
     initialPath: "restore.db",
+    restoreStrategy: "replace",
     prepareBackupRestore: async () => ({
       path: "C:/tmp/incompatible.db",
       preview: buildPreview({ compatibilityLevel: "incompatible" }),
@@ -531,9 +559,11 @@ await runTest("runBackupRestoreFlow blocks incompatible backups before confirmat
 
 await runTest("runBackupRestoreFlow restores and reloads after confirmation", async () => {
   const events: string[] = [];
+  let receivedStrategy = "";
 
   const result = await runBackupRestoreFlow({
     initialPath: "restore.db",
+    restoreStrategy: "merge",
     prepareBackupRestore: async () => ({
       path: "C:/tmp/restore.db",
       preview: buildPreview(),
@@ -547,7 +577,8 @@ await runTest("runBackupRestoreFlow restores and reloads after confirmation", as
       events.push("confirm");
       return true;
     },
-    restoreBackup: async (path) => {
+    restoreBackup: async (path, strategy) => {
+      receivedStrategy = strategy;
       events.push(`restore:${path}`);
     },
     notify: (_message, tone) => {
@@ -565,6 +596,7 @@ await runTest("runBackupRestoreFlow restores and reloads after confirmation", as
   });
 
   assert.equal(result, true);
+  assert.equal(receivedStrategy, "merge");
   assert.deepEqual(events, [
     "path:C:/tmp/restore.db",
     "confirm",

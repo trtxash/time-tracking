@@ -15,6 +15,7 @@
 Release: 待定。
 
 App note: 待定。
+App note en: TBD.
 
 ### Added
 
@@ -36,11 +37,39 @@ App note: 待定。
 
 - 暂无。
 
+## [0.7.1] - 2026-05-17
+
+Release: 修复英文界面更新说明仍显示中文的问题。
+
+App note: 修复英文更新说明显示。
+App note en: Fixed English release notes.
+
+### Added
+
+- 暂无。
+
+### Changed
+
+- 更新通道的应用内说明改为包含中英文短说明，后续版本会按当前界面语言显示对应内容。
+
+### Fixed
+
+- 修复英文界面的更新弹窗仍直接显示中文发布说明的问题。
+
+### Removed
+
+- 暂无。
+
+### Internal
+
+- 发布脚本支持 `App note en:` 字段，并在 `latest.json` 中写入可本地化的更新说明。
+
 ## [0.7.0] - 2026-05-17
 
 Release: 改进应用映射搜索、备份恢复确认和今日概览体验。
 
 App note: 改进应用映射与备份恢复。
+App note en: Improved app mapping and backup restore.
 
 ### Added
 

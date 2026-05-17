@@ -181,6 +181,17 @@ function fieldValue(sectionBody, field) {
   return match?.[1]?.trim() ?? "";
 }
 
+function renderLocalizedAppNote(parsed) {
+  if (!parsed.appNoteEn) {
+    return parsed.appNote;
+  }
+
+  return [
+    `zh-CN: ${parsed.appNote}`,
+    `en-US: ${parsed.appNoteEn}`,
+  ].join("\n");
+}
+
 function assertFinalField(field, value, version) {
   if (!value) {
     fail(`CHANGELOG.md ${version} is missing "${field}:"`);
@@ -216,12 +227,14 @@ async function parseChangelog(version) {
   const section = findVersionSection(changelog, targetVersion);
   const release = fieldValue(section.body, "Release");
   const appNote = fieldValue(section.body, "App note");
+  const appNoteEn = fieldValue(section.body, "App note en");
 
   return {
     version: targetVersion,
     ...section,
     release,
     appNote,
+    appNoteEn,
     bullets: ["Added", "Changed", "Fixed", "Removed"].flatMap((heading) =>
       sectionBullets(section.body, heading),
     ),
@@ -240,6 +253,10 @@ async function validateChangelog(version) {
 
   if (parsed.appNote.length > 40) {
     fail(`CHANGELOG.md ${parsed.version} App note is too long; keep it lighter`);
+  }
+
+  if (parsed.appNoteEn && parsed.appNoteEn.length > 80) {
+    fail(`CHANGELOG.md ${parsed.version} App note en is too long; keep it lighter`);
   }
 }
 
@@ -293,7 +310,7 @@ async function writeLatestJson(version, assetUrl, signature, outputPath, target 
 
   const latest = {
     version,
-    notes: parsed.appNote,
+    notes: renderLocalizedAppNote(parsed),
     pub_date: new Date().toISOString(),
     platforms: {
       [target]: {

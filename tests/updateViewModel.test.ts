@@ -5,6 +5,7 @@ import {
   shouldOpenUpdateDialogForSnapshot,
   shouldShowSidebarUpdateEntry,
 } from "../src/features/update/services/updateViewModel.ts";
+import { setUiTextLanguage } from "../src/shared/copy/uiText.ts";
 import type { UpdateSnapshot } from "../src/shared/types/update.ts";
 
 function makeSnapshot(overrides: Partial<UpdateSnapshot> = {}): UpdateSnapshot {
@@ -163,6 +164,18 @@ runTest("confirm dialog model includes notes preview", () => {
   assert.equal(model.versionCompareLabel, "v0.1.0 -> v0.2.0");
   assert.ok(model.notesPreview !== null);
   assert.ok(model.notesPreview!.length <= 223);
+});
+
+runTest("confirm dialog localizes structured release notes", () => {
+  setUiTextLanguage("en-US");
+  const model = buildUpdateConfirmDialogModel(makeSnapshot({
+    status: "available",
+    latestVersion: "0.2.0",
+    releaseNotes: "zh-CN: 改进应用映射与备份恢复。\nen-US: Improved app mapping and backup restore.",
+  }));
+
+  assert.equal(model.notesPreview, "Improved app mapping and backup restore.");
+  setUiTextLanguage("zh-CN");
 });
 
 runTest("confirm dialog shows progress while downloading", () => {

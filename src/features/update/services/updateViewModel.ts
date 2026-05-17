@@ -1,5 +1,5 @@
 import type { UpdateErrorStage, UpdateSnapshot } from "../../../shared/types/update";
-import { UI_TEXT } from "../../../shared/copy/uiText.ts";
+import { getUiTextLanguage, UI_TEXT } from "../../../shared/copy/uiText.ts";
 
 export type UpdateAction =
   | "check"
@@ -63,9 +63,24 @@ function formatVersion(value: string | null): string {
 
 function getReleaseNotesPreview(releaseNotes: string | null): string | null {
   if (!releaseNotes) return null;
-  const trimmed = releaseNotes.trim();
+  const trimmed = resolveLocalizedReleaseNotes(releaseNotes).trim();
   if (!trimmed) return null;
   return trimmed.length > 220 ? `${trimmed.slice(0, 220).trimEnd()}...` : trimmed;
+}
+
+function resolveLocalizedReleaseNotes(releaseNotes: string): string {
+  const localizedNotes: Partial<Record<"zh-CN" | "en-US", string>> = {};
+
+  for (const line of releaseNotes.split(/\r?\n/)) {
+    const match = /^(zh-CN|en-US):\s*(.+)$/.exec(line.trim());
+    if (match) {
+      const language = match[1] as "zh-CN" | "en-US";
+      localizedNotes[language] = match[2].trim();
+    }
+  }
+
+  const language = getUiTextLanguage();
+  return localizedNotes[language] ?? localizedNotes["zh-CN"] ?? releaseNotes;
 }
 
 function formatByteCount(value: number): string {

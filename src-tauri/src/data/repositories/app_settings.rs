@@ -5,6 +5,13 @@ const CLOSE_BEHAVIOR_KEY: &str = "close_behavior";
 const MINIMIZE_BEHAVIOR_KEY: &str = "minimize_behavior";
 const LAUNCH_AT_LOGIN_KEY: &str = "launch_at_login";
 const START_MINIMIZED_KEY: &str = "start_minimized";
+const MAX_APP_SETTING_VALUE_LEN: usize = 4096;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AppSettingMutation {
+    pub key: String,
+    pub value: String,
+}
 
 pub async fn load_desktop_behavior_settings(
     pool: &Pool<Sqlite>,
@@ -47,4 +54,157 @@ pub async fn load_desktop_behavior_settings(
         launch_at_login_raw.as_deref(),
         start_minimized_raw.as_deref(),
     ))
+}
+
+pub async fn commit_app_setting_mutations(
+    pool: &Pool<Sqlite>,
+    mutations: &[AppSettingMutation],
+) -> Result<(), String> {
+    if mutations.is_empty() {
+        return Ok(());
+    }
+
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|error| format!("failed to start app settings transaction: {error}"))?;
+
+    for mutation in mutations {
+        validate_app_setting_mutation(mutation)?;
+        sqlx::query(
+            "INSERT INTO settings (key, value) VALUES (?, ?)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        )
+        .bind(&mutation.key)
+        .bind(&mutation.value)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| format!("failed to save app setting: {error}"))?;
+    }
+
+    tx.commit()
+        .await
+        .map_err(|error| format!("failed to commit app settings transaction: {error}"))?;
+
+    Ok(())
+}
+
+fn validate_app_setting_mutation(mutation: &AppSettingMutation) -> Result<(), String> {
+    if !is_allowed_app_setting_key(&mutation.key) {
+        return Err(format!("invalid app setting key `{}`", mutation.key));
+    }
+
+    if mutation.value.len() > MAX_APP_SETTING_VALUE_LEN {
+        return Err(format!(
+            "app setting value is too large for key `{}`",
+            mutation.key
+        ));
+    }
+
+    Ok(())
+}
+
+fn is_allowed_app_setting_key(key: &str) -> bool {
+    matches!(
+        key,
+        "idle_timeout_secs"
+            | "timeline_merge_gap_secs"
+            | "refresh_interval_secs"
+            | "min_session_secs"
+            | "tracking_paused"
+            | "close_behavior"
+            | "minimize_behavior"
+            | "theme_mode"
+            | "language"
+            | "color_scheme_light"
+            | "color_scheme_dark"
+            | "launch_at_login"
+            | "start_minimized"
+            | "onboarding_completed"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::schema as db_schema;
+    use sqlx::{Executor, Row, SqlitePool};
+
+    async fn setup_test_db() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        pool.execute(db_schema::CURRENT_BASELINE_SCHEMA_SQL)
+            .await
+            .unwrap();
+        pool
+    }
+
+    async fn load_setting(pool: &SqlitePool, key: &str) -> Option<String> {
+        sqlx::query("SELECT value FROM settings WHERE key = ? LIMIT 1")
+            .bind(key)
+            .fetch_optional(pool)
+            .await
+            .unwrap()
+            .and_then(|row| row.try_get::<String, _>("value").ok())
+    }
+
+    #[test]
+    fn commit_app_setting_mutations_upserts_in_one_transaction() {
+        tauri::async_runtime::block_on(async {
+            let pool = setup_test_db().await;
+
+            commit_app_setting_mutations(
+                &pool,
+                &[
+                    AppSettingMutation {
+                        key: "theme_mode".to_string(),
+                        value: "dark".to_string(),
+                    },
+                    AppSettingMutation {
+                        key: "language".to_string(),
+                        value: "en-US".to_string(),
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(
+                load_setting(&pool, "theme_mode").await,
+                Some("dark".to_string())
+            );
+            assert_eq!(
+                load_setting(&pool, "language").await,
+                Some("en-US".to_string())
+            );
+        });
+    }
+
+    #[test]
+    fn commit_app_setting_mutations_rolls_back_invalid_batches() {
+        tauri::async_runtime::block_on(async {
+            let pool = setup_test_db().await;
+
+            let result = commit_app_setting_mutations(
+                &pool,
+                &[
+                    AppSettingMutation {
+                        key: "theme_mode".to_string(),
+                        value: "dark".to_string(),
+                    },
+                    AppSettingMutation {
+                        key: "__tracker_last_heartbeat_ms".to_string(),
+                        value: "123".to_string(),
+                    },
+                ],
+            )
+            .await;
+
+            assert!(result.is_err());
+            assert_eq!(load_setting(&pool, "theme_mode").await, None);
+            assert_eq!(
+                load_setting(&pool, "__tracker_last_heartbeat_ms").await,
+                None
+            );
+        });
+    }
 }

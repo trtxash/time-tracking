@@ -1,0 +1,33 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "widget",
+  "description": "Least-privilege capability for the compact widget window",
+  "windows": [
+    "widget"
+  ],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:window:allow-available-monitors",
+    "core:window:allow-current-monitor",
+    "core:window:allow-cursor-position",
+    "core:window:allow-is-focused",
+    "core:window:allow-is-visible",
+    "core:window:allow-outer-position",
+    "core:window:allow-outer-size",
+    "core:window:allow-primary-monitor",
+    "core:window:allow-set-focusable",
+    "core:window:allow-start-dragging",
+    {
+      "identifier": "sql:allow-load",
+      "args": {
+        "db": "sqlite:timetracker.db"
+      }
+    },
+    {
+      "identifier": "sql:allow-select",
+      "args": {
+        "db": "sqlite:timetracker.db"
+      }
+    }
+  ]
+}

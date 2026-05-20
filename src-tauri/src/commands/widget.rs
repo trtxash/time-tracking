@@ -1,12 +1,19 @@
 use crate::app::{tray, widget};
+use crate::data::icon_cache_service;
 use crate::domain::widget::{WidgetPlacement, WidgetSide};
 use crate::engine::widget as widget_engine;
 use crate::platform::windows::input;
+use std::collections::HashMap;
 use tauri::AppHandle;
 
 #[tauri::command]
 pub async fn cmd_get_widget_placement(app: AppHandle) -> Result<WidgetPlacement, String> {
     widget_engine::load_widget_placement(&app).await
+}
+
+#[tauri::command]
+pub async fn cmd_get_widget_icon_map(app: AppHandle) -> Result<HashMap<String, String>, String> {
+    icon_cache_service::load_icon_map(&app).await
 }
 
 #[tauri::command]

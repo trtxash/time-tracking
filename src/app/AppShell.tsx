@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
-import { setUiTextLanguage, UI_TEXT } from "../shared/copy/uiText.ts";
+import { getUiText, setUiTextLanguage } from "../shared/copy/uiText.ts";
 import AppSidebar from "./components/AppSidebar";
 import AppTitleBar from "./components/AppTitleBar";
 import Dashboard from "../features/dashboard/components/Dashboard";
@@ -77,13 +77,22 @@ function AppShellContent() {
     syncTick,
     trackerHealth,
   } = useWindowTracking();
-  setUiTextLanguage(settingsLanguagePreview ?? appSettings.language);
+  const [syncedUiTextLanguage, setSyncedUiTextLanguage] = useState<AppLanguage>(appSettings.language);
+  const uiTextLanguage = settingsLanguagePreview ?? appSettings.language;
+  const uiText = getUiText(uiTextLanguage);
+
+  useEffect(() => {
+    setUiTextLanguage(uiTextLanguage);
+    setSyncedUiTextLanguage(uiTextLanguage);
+  }, [uiTextLanguage]);
+
   useAppThemeMode(
     settingsThemeModePreview ?? appSettings.themeMode,
     settingsColorSchemePreview?.light ?? appSettings.colorSchemeLight,
     settingsColorSchemePreview?.dark ?? appSettings.colorSchemeDark,
   );
   const refreshSignal = resolveReadModelRefreshSignal(syncTick, readModelRefreshState);
+  void syncedUiTextLanguage;
   const { mappingVersion } = readModelRefreshState;
   const { dashboard, icons } = useDashboardStats(
     appSettings.refreshIntervalSecs,
@@ -184,7 +193,7 @@ function AppShellContent() {
           <Suspense
             fallback={
               <div className="flex-1 min-h-0 flex items-center justify-center text-[var(--qp-text-tertiary)] text-sm">
-                {UI_TEXT.app.loadingView}
+                {uiText.app.loadingView}
               </div>
             }
           >
@@ -259,13 +268,13 @@ function AppShellContent() {
                   onDirtyChange={setMappingDirty}
                   onOverridesChanged={() => {
                     setReadModelRefreshState(applyMappingOverridesReadModelRefresh);
-                    pushToast(UI_TEXT.app.mappingUpdated, "success");
+                    pushToast(uiText.app.mappingUpdated, "success");
                   }}
                   onSessionsDeleted={() => {
                     clearHistorySnapshotCache();
                     clearDataReadModelCache();
                     setReadModelRefreshState(applySessionDeletionReadModelRefresh);
-                    pushToast(UI_TEXT.app.historyDeleted, "success");
+                    pushToast(uiText.app.historyDeleted, "success");
                   }}
                 />
               )}

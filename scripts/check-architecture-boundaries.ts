@@ -2,6 +2,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, normalize, relative, sep } from "node:path";
 
 const SCAN_ROOTS = ["src/app", "src/features", "src/shared", "src/platform"] as const;
+const DEFAULT_CAPABILITY_PATH = "src-tauri/capabilities/default.json";
+const WIDGET_CAPABILITY_PATH = "src-tauri/capabilities/widget.json";
 
 interface SourceFile {
   path: string;
@@ -188,6 +190,47 @@ function findArchitectureViolations(files: SourceFile[]): ArchitectureViolation[
   return violations;
 }
 
+function assertRuntimeBoundaryGuards() {
+  const defaultCapability = JSON.parse(readFileSync(DEFAULT_CAPABILITY_PATH, "utf8")) as {
+    windows?: string[];
+    permissions?: unknown[];
+  };
+  const widgetCapability = JSON.parse(readFileSync(WIDGET_CAPABILITY_PATH, "utf8")) as {
+    windows?: string[];
+    permissions?: unknown[];
+  };
+
+  if (defaultCapability.windows?.includes("widget")) {
+    throw new Error("Default capability must not include the widget window");
+  }
+
+  if (!widgetCapability.windows?.includes("widget")) {
+    throw new Error("Widget capability must explicitly include the widget window");
+  }
+
+  const widgetPermissionText = JSON.stringify(widgetCapability.permissions ?? []);
+  if (widgetPermissionText.includes("sql:allow-execute")) {
+    throw new Error("Widget capability must not include sql:allow-execute");
+  }
+
+  const appShell = readFileSync("src/app/AppShell.tsx", "utf8");
+  const widgetShell = readFileSync("src/app/widget/WidgetShell.tsx", "utf8");
+  for (const [path, content] of [
+    ["src/app/AppShell.tsx", appShell],
+    ["src/app/widget/WidgetShell.tsx", widgetShell],
+  ] as const) {
+    const renderBody = content.split(/\buseEffect\s*\(/)[0] ?? content;
+    if (renderBody.includes("setUiTextLanguage(")) {
+      throw new Error(`${path} must not call setUiTextLanguage before its first effect`);
+    }
+  }
+
+  const widgetIconService = readFileSync("src/app/widget/widgetIconService.ts", "utf8");
+  if (widgetIconService.includes("platform/persistence/sessionReadRepository")) {
+    throw new Error("Widget icon service must not import the session read repository directly");
+  }
+}
+
 function runSelfTest() {
   const violations = findArchitectureViolations([
     {
@@ -242,6 +285,8 @@ function runSelfTest() {
   if (JSON.stringify(rules) !== JSON.stringify(expectedRules)) {
     throw new Error("Architecture boundary self-test failed");
   }
+
+  assertRuntimeBoundaryGuards();
 }
 
 function main() {
@@ -253,6 +298,7 @@ function main() {
 
   const files = SCAN_ROOTS.flatMap((root) => collectSourceFiles(root));
   const violations = findArchitectureViolations(files);
+  assertRuntimeBoundaryGuards();
 
   if (violations.length === 0) {
     console.log("Architecture boundary check passed");

@@ -7,6 +7,10 @@ import {
   type SessionRange,
 } from "../../../shared/lib/sessionReadCompiler.ts";
 import { getUiLocale, UI_TEXT } from "../../../shared/copy/uiText.ts";
+import {
+  getEarliestSessionStartTime,
+  getSessionsInRange,
+} from "../../../platform/persistence/sessionReadRepository.ts";
 
 export type { HistorySession };
 
@@ -445,10 +449,9 @@ export function buildDataAppTrendViewModel(
 }
 
 async function resolveDefaultDataHeatmapDependencies(): Promise<DataHeatmapDependencies> {
-  const repository = await import("../../../platform/persistence/sessionReadRepository.ts");
   return {
-    getEarliestSessionStartTime: repository.getEarliestSessionStartTime,
-    getSessionsInRange: repository.getSessionsInRange,
+    getEarliestSessionStartTime,
+    getSessionsInRange,
   };
 }
 

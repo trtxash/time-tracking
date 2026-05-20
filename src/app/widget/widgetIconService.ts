@@ -1,15 +1,39 @@
-import { getIconMap } from "../../platform/persistence/sessionReadRepository.ts";
+import { invoke } from "@tauri-apps/api/core";
+import { AppClassification } from "../../shared/classification/appClassification.ts";
 
 interface WidgetIconServiceDeps {
   getIconMap: () => Promise<Record<string, string>>;
 }
 
 const widgetIconServiceDeps: WidgetIconServiceDeps = {
-  getIconMap,
+  getIconMap: loadWidgetIconMapFromRuntime,
 };
 
 let iconMapCache: Record<string, string> | null = null;
 let iconMapPromise: Promise<Record<string, string>> | null = null;
+
+function expandIconMap(rawIcons: Record<string, string>): Record<string, string> {
+  const map: Record<string, string> = {};
+
+  for (const [rawExe, icon] of Object.entries(rawIcons)) {
+    const trimmedExe = rawExe.trim();
+    if (!trimmedExe) continue;
+
+    const normalizedExe = AppClassification.resolveCanonicalExecutable(trimmedExe);
+    const lowerExe = trimmedExe.toLowerCase();
+
+    map[trimmedExe] = icon;
+    map[lowerExe] = icon;
+    map[normalizedExe] = icon;
+  }
+
+  return map;
+}
+
+async function loadWidgetIconMapFromRuntime(): Promise<Record<string, string>> {
+  const rawIcons = await invoke<Record<string, string>>("cmd_get_widget_icon_map");
+  return expandIconMap(rawIcons);
+}
 
 async function loadWidgetIconMap(deps: WidgetIconServiceDeps) {
   if (iconMapCache) {

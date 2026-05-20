@@ -8,8 +8,10 @@ import {
 import { buildClassificationDraftChangePlan } from "../src/features/classification/services/classificationDraftState.ts";
 import { buildCommitDraftChangePlanSettingMutations } from "../src/features/classification/services/classificationStore.ts";
 import {
+  buildAppSettingMutations,
   buildRawAppSettingsPatch,
   buildSaveSettingEntryOperations,
+  isCommitAppSettingsCommandUnavailable,
 } from "../src/platform/persistence/appSettingsStore.ts";
 import {
   buildClassificationSettingMutationOperations,
@@ -149,10 +151,41 @@ await runTest("settings raw patch persists theme mode with snake case key", () =
   });
 });
 
+await runTest("app setting mutations serialize values for backend transaction command", () => {
+  assert.deepEqual(buildAppSettingMutations(buildRawAppSettingsPatch({
+    trackingPaused: true,
+    timelineMergeGapSecs: 180,
+    themeMode: "system",
+    language: "en-US",
+  })), [
+    { key: "tracking_paused", value: "1" },
+    { key: "timeline_merge_gap_secs", value: "180" },
+    { key: "theme_mode", value: "system" },
+    { key: "language", value: "en-US" },
+  ]);
+});
+
 await runTest("SQLite transient write errors are recoverable", () => {
   assert.equal(isRecoverableSqliteWriteError("database is locked"), true);
   assert.equal(isRecoverableSqliteWriteError(new Error("SQLITE_BUSY: database is busy")), true);
   assert.equal(isRecoverableSqliteWriteError("UNIQUE constraint failed: settings.key"), false);
+});
+
+await runTest("app setting command fallback only catches missing command", () => {
+  assert.equal(
+    isCommitAppSettingsCommandUnavailable("Command cmd_commit_app_settings not found"),
+    true,
+  );
+  assert.equal(
+    isCommitAppSettingsCommandUnavailable({
+      message: "unknown command: cmd_commit_app_settings",
+    }),
+    true,
+  );
+  assert.equal(
+    isCommitAppSettingsCommandUnavailable("database is locked"),
+    false,
+  );
 });
 
 await runTest("classification setting mutation fallback builds ordered writes", () => {

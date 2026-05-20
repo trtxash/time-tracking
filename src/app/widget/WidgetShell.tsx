@@ -15,7 +15,7 @@ import { useAppThemeMode } from "../hooks/useAppThemeMode.ts";
 import { useWidgetObjectIcon } from "../hooks/useWidgetObjectIcon";
 import { useWidgetWindowState } from "./useWidgetWindowState";
 import { buildWidgetViewModel, isWidgetSelfWindow } from "./widgetViewModel";
-import { setUiTextLanguage, UI_TEXT } from "../../shared/copy/uiText";
+import { getUiText, setUiTextLanguage } from "../../shared/copy/uiText";
 
 interface WidgetDisplaySnapshot {
   activeWindow: TrackingWindowSnapshot | null;
@@ -34,7 +34,14 @@ export default function WidgetShell() {
     classificationReady,
     trackerHealth,
   } = useWindowTracking({ syncDesktopLaunchBehavior: false });
-  setUiTextLanguage(appSettings.language);
+  const [syncedUiTextLanguage, setSyncedUiTextLanguage] = useState(appSettings.language);
+  const uiText = getUiText(appSettings.language);
+
+  useEffect(() => {
+    setUiTextLanguage(appSettings.language);
+    setSyncedUiTextLanguage(appSettings.language);
+  }, [appSettings.language]);
+
   useAppThemeMode(appSettings.themeMode, appSettings.colorSchemeLight, appSettings.colorSchemeDark);
   const [lastNonWidgetSnapshot, setLastNonWidgetSnapshot] = useState<WidgetDisplaySnapshot | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -68,10 +75,10 @@ export default function WidgetShell() {
     )
     : {
       statusTone: "idle" as const,
-      statusLabel: UI_TEXT.widget.loadingStatus,
-      appName: UI_TEXT.widget.loadingAppName,
-      helperText: UI_TEXT.widget.loadingHelper,
-      pauseActionLabel: UI_TEXT.widget.pauseTracking,
+      statusLabel: uiText.widget.loadingStatus,
+      appName: uiText.widget.loadingAppName,
+      helperText: uiText.widget.loadingHelper,
+      pauseActionLabel: uiText.widget.pauseTracking,
       showObjectSlot: false,
       objectIconKey: null,
     };
@@ -79,7 +86,8 @@ export default function WidgetShell() {
   const statusTitle = `${viewModel.statusLabel} | ${viewModel.appName}`;
   const objectIcon = useWidgetObjectIcon(viewModel.objectIconKey);
   const showObjectSlot = viewModel.showObjectSlot && Boolean(objectIcon);
-  const objectSlotTitle = UI_TEXT.accessibility.widget.currentApp(viewModel.appName);
+  const objectSlotTitle = uiText.accessibility.widget.currentApp(viewModel.appName);
+  void syncedUiTextLanguage;
   const dragHoldTimerRef = useRef<number | null>(null);
   const dragPointerIdRef = useRef<number | null>(null);
   const dragReleasePollRef = useRef<number | null>(null);
@@ -329,8 +337,8 @@ export default function WidgetShell() {
 
             <QuietIconAction
               icon={<SquareArrowOutUpRight size={15} strokeWidth={1.8} />}
-              title={UI_TEXT.accessibility.widget.openMainWindow}
-              ariaLabel={UI_TEXT.accessibility.widget.openMainWindow}
+              title={uiText.accessibility.widget.openMainWindow}
+              ariaLabel={uiText.accessibility.widget.openMainWindow}
               className="widget-pill-action"
               showTooltip={false}
               disabled={!expanded}
@@ -349,7 +357,7 @@ export default function WidgetShell() {
           className={`widget-pill-anchor widget-pill-anchor-${viewModel.statusTone} ${
             renderExpanded ? "widget-pill-anchor-expanded" : "widget-pill-anchor-collapsed"
           }`}
-          aria-label={UI_TEXT.accessibility.widget.toggle(expanded, statusTitle)}
+          aria-label={uiText.accessibility.widget.toggle(expanded, statusTitle)}
           aria-expanded={expanded}
           onPointerDown={handleCollapsedDragPointerDown}
           onPointerUp={handleCollapsedDragPointerEnd}

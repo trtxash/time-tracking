@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import {
   clearAllSessionWindowTitles,
   deleteSessionsBefore,
@@ -17,10 +18,15 @@ import {
 
 const TRACKER_LAST_HEARTBEAT_KEY = "__tracker_last_heartbeat_ms";
 const TRACKER_LAST_SUCCESSFUL_SAMPLE_KEY = "__tracker_last_successful_sample_ms";
+const COMMIT_APP_SETTINGS_COMMAND = "cmd_commit_app_settings";
 
 export type { AppSettings };
 export type AppSettingsPatch = Partial<AppSettings>;
 type PersistedSettingValue = string | number | boolean;
+interface AppSettingMutation {
+  key: string;
+  value: string;
+}
 
 type RawAppSettingsKey =
   | "idle_timeout_secs"
@@ -247,7 +253,7 @@ export async function saveAppSetting<K extends keyof AppSettings>(
 }
 
 export async function saveAppSettingsPatch(patch: AppSettingsPatch): Promise<void> {
-  await saveSettingEntries(buildRawAppSettingsPatch(patch));
+  await commitAppSettingMutations(buildAppSettingMutations(buildRawAppSettingsPatch(patch)));
 }
 
 export async function clearSessionsBefore(cutoffTime: number): Promise<void> {
@@ -278,6 +284,65 @@ async function saveSettingEntries(
 ): Promise<void> {
   const operations = buildSaveSettingEntryOperations(patch);
   await executeWriteBatch(operations);
+}
+
+function stringifyInvokeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+export function isCommitAppSettingsCommandUnavailable(error: unknown): boolean {
+  const message = stringifyInvokeError(error);
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes(COMMIT_APP_SETTINGS_COMMAND)
+    && (
+      normalized.includes("not found")
+      || normalized.includes("unknown")
+      || normalized.includes("unhandled")
+      || normalized.includes("not registered")
+    )
+  ) || (
+    normalized.includes("command")
+    && normalized.includes("not found")
+  );
+}
+
+export function buildAppSettingMutations(
+  patch: Record<string, PersistedSettingValue>,
+): AppSettingMutation[] {
+  return Object.entries(patch).map(([key, value]) => ({
+    key,
+    value: serializeSettingValue(value),
+  }));
+}
+
+async function commitAppSettingMutations(mutations: readonly AppSettingMutation[]): Promise<void> {
+  if (mutations.length === 0) {
+    return;
+  }
+
+  try {
+    await invoke(COMMIT_APP_SETTINGS_COMMAND, { mutations });
+  } catch (error) {
+    if (!isCommitAppSettingsCommandUnavailable(error)) {
+      throw error;
+    }
+
+    const fallbackPatch = Object.fromEntries(
+      mutations.map((mutation) => [mutation.key, mutation.value]),
+    );
+    await saveSettingEntries(fallbackPatch);
+  }
 }
 
 export function buildSaveSettingEntryOperations(

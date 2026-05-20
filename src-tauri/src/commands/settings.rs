@@ -1,14 +1,32 @@
 use crate::app::desktop_behavior;
 use crate::app::state::DesktopBehaviorState;
+use crate::data::app_settings_service::commit_app_setting_mutations_with_recovery;
 use crate::data::classification_service::commit_classification_setting_mutations_with_recovery;
+use crate::data::repositories::app_settings::AppSettingMutation;
 use crate::data::repositories::classification_settings::ClassificationSettingMutation;
 use tauri::{AppHandle, State};
+
+#[derive(Clone, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSettingMutationDto {
+    key: String,
+    value: String,
+}
 
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClassificationSettingMutationDto {
     key: String,
     value: Option<String>,
+}
+
+impl From<AppSettingMutationDto> for AppSettingMutation {
+    fn from(value: AppSettingMutationDto) -> Self {
+        Self {
+            key: value.key,
+            value: value.value,
+        }
+    }
 }
 
 impl From<ClassificationSettingMutationDto> for ClassificationSettingMutation {
@@ -49,6 +67,19 @@ pub fn cmd_set_launch_behavior(
         launch_at_login,
         start_minimized,
     )
+}
+
+#[tauri::command]
+pub async fn cmd_commit_app_settings(
+    mutations: Vec<AppSettingMutationDto>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let mutations = mutations
+        .into_iter()
+        .map(AppSettingMutation::from)
+        .collect::<Vec<_>>();
+
+    commit_app_setting_mutations_with_recovery(&app, &mutations).await
 }
 
 #[tauri::command]

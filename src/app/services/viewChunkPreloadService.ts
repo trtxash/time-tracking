@@ -1,4 +1,6 @@
-export type PreloadableView = "history" | "settings" | "mapping" | "data";
+import { createElement, type ComponentType } from "react";
+
+export type PreloadableView = "history" | "settings" | "mapping" | "data" | "about";
 
 export interface LazyViewChunkPreloadOptions {
   views?: PreloadableView[];
@@ -9,6 +11,7 @@ export interface LazyViewChunkPreloadOptions {
 
 type ViewChunkLoader = () => Promise<unknown>;
 type ViewChunkLoaders = Record<PreloadableView, ViewChunkLoader>;
+type ViewChunkStatus = "idle" | "pending" | "resolved" | "rejected";
 type SchedulePreloadTask = (
   callback: () => void,
   delayMs: number,
@@ -26,7 +29,7 @@ type IdleWindow = Window & typeof globalThis & {
   cancelIdleCallback?: (handle: number) => void;
 };
 
-const DEFAULT_PRELOADABLE_VIEWS: PreloadableView[] = ["history", "data", "settings", "mapping"];
+const DEFAULT_PRELOADABLE_VIEWS: PreloadableView[] = ["history", "data", "mapping", "settings", "about"];
 const DEFAULT_INITIAL_DELAY_MS = 1200;
 const DEFAULT_STAGGER_MS = 200;
 const DEFAULT_IDLE_TIMEOUT_MS = 1500;
@@ -36,7 +39,35 @@ const DEFAULT_VIEW_CHUNK_LOADERS: ViewChunkLoaders = {
   settings: () => import("../../features/settings/components/Settings"),
   mapping: () => import("../../features/classification/components/AppMapping"),
   data: () => import("../../features/data/components/Data"),
+  about: () => import("../../features/about/components/About"),
 };
+
+interface ViewChunkRecord {
+  error?: unknown;
+  module?: unknown;
+  promise?: Promise<unknown>;
+  status: ViewChunkStatus;
+}
+
+const viewChunkRecords = new Map<PreloadableView, ViewChunkRecord>();
+
+function getViewChunkRecord(view: PreloadableView): ViewChunkRecord {
+  const existing = viewChunkRecords.get(view);
+  if (existing) {
+    return existing;
+  }
+
+  const record: ViewChunkRecord = { status: "idle" };
+  viewChunkRecords.set(view, record);
+  return record;
+}
+
+function resolveViewChunkLoaders(loaders?: Partial<ViewChunkLoaders>): ViewChunkLoaders {
+  return {
+    ...DEFAULT_VIEW_CHUNK_LOADERS,
+    ...loaders,
+  };
+}
 
 function schedulePreloadTask(
   callback: () => void,
@@ -76,10 +107,7 @@ export function scheduleLazyViewChunkPreload(
   const initialDelayMs = options.initialDelayMs ?? DEFAULT_INITIAL_DELAY_MS;
   const staggerMs = options.staggerMs ?? DEFAULT_STAGGER_MS;
   const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
-  const loaders: ViewChunkLoaders = {
-    ...DEFAULT_VIEW_CHUNK_LOADERS,
-    ...deps.loaders,
-  };
+  const loaders = resolveViewChunkLoaders(deps.loaders);
   const schedule = deps.schedule ?? schedulePreloadTask;
   const warn = deps.warn ?? console.warn;
   let cancelled = false;
@@ -102,10 +130,9 @@ export function scheduleLazyViewChunkPreload(
     }
 
     const view = views[index];
-    const loader = loaders[view];
 
     try {
-      await loader();
+      await preloadLazyViewChunk(view, { loaders });
     } catch (error) {
       warn(`Failed to preload ${view} view chunk`, error);
     }
@@ -122,4 +149,71 @@ export function scheduleLazyViewChunkPreload(
     cancelCurrentTask?.();
     cancelCurrentTask = null;
   };
+}
+
+export function preloadLazyViewChunk(
+  view: PreloadableView,
+  deps: Pick<LazyViewChunkPreloadDeps, "loaders"> = {},
+): Promise<unknown> {
+  const record = getViewChunkRecord(view);
+
+  if (record.status === "resolved") {
+    return Promise.resolve(record.module);
+  }
+
+  if (record.status === "pending" && record.promise) {
+    return record.promise;
+  }
+
+  const loaders = resolveViewChunkLoaders(deps.loaders);
+  const promise = loaders[view]()
+    .then((loadedModule) => {
+      record.status = "resolved";
+      record.module = loadedModule;
+      record.promise = undefined;
+      record.error = undefined;
+      return loadedModule;
+    })
+    .catch((error) => {
+      record.status = "rejected";
+      record.promise = undefined;
+      record.error = error;
+      throw error;
+    });
+
+  record.status = "pending";
+  record.promise = promise;
+  record.module = undefined;
+  record.error = undefined;
+  return promise;
+}
+
+export function readPreloadedViewComponent(view: PreloadableView): ComponentType<Record<string, unknown>> {
+  const record = getViewChunkRecord(view);
+
+  if (record.status === "resolved") {
+    return (record.module as { default: ComponentType<Record<string, unknown>> }).default;
+  }
+
+  if (record.status === "rejected") {
+    throw record.error;
+  }
+
+  throw preloadLazyViewChunk(view);
+}
+
+export function createPreloadableViewComponent(
+  view: PreloadableView,
+): ComponentType<Record<string, unknown>> {
+  const displayName = `PreloadableView(${view})`;
+  const PreloadableViewComponent: ComponentType<Record<string, unknown>> = (props) => {
+    const Component = readPreloadedViewComponent(view);
+    return createElement(Component, props);
+  };
+  PreloadableViewComponent.displayName = displayName;
+  return PreloadableViewComponent;
+}
+
+export function resetPreloadableViewChunksForTests(): void {
+  viewChunkRecords.clear();
 }

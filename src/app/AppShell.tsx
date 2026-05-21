@@ -1,11 +1,11 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { getUiText, setUiTextLanguage } from "../shared/copy/uiText.ts";
 import AppSidebar from "./components/AppSidebar";
 import AppTitleBar from "./components/AppTitleBar";
 import Dashboard from "../features/dashboard/components/Dashboard";
 import { watchCurrentWindowMaximized } from "../platform/desktop/windowControlGateway";
 import QuietToastStack from "../shared/components/QuietToastStack";
-import type { AppLanguage, ThemeMode } from "../shared/settings/appSettings.ts";
+import type { AppLanguage, AppSettings, ThemeMode } from "../shared/settings/appSettings.ts";
 import type { ColorSchemePreview } from "../features/settings/types.ts";
 import { useDashboardStats } from "../features/dashboard/hooks/useDashboardStats";
 import { useWindowTracking } from "./hooks/useWindowTracking";
@@ -34,13 +34,16 @@ import { useAppShellToasts } from "./hooks/useAppShellToasts";
 import { useAppShellUpdateEntry } from "./hooks/useAppShellUpdateEntry";
 import { useAppThemeMode } from "./hooks/useAppThemeMode.ts";
 import { saveMinSessionSecsSetting } from "./services/appSettingsRuntimeService.ts";
-import { scheduleLazyViewChunkPreload } from "./services/viewChunkPreloadService";
+import {
+  createPreloadableViewComponent,
+  scheduleLazyViewChunkPreload,
+} from "./services/viewChunkPreloadService";
 
-const History = lazy(() => import("../features/history/components/History"));
-const Data = lazy(() => import("../features/data/components/Data"));
-const Settings = lazy(() => import("../features/settings/components/Settings"));
-const About = lazy(() => import("../features/about/components/About"));
-const AppMapping = lazy(() => import("../features/classification/components/AppMapping"));
+const History = createPreloadableViewComponent("history");
+const Data = createPreloadableViewComponent("data");
+const Settings = createPreloadableViewComponent("settings");
+const About = createPreloadableViewComponent("about");
+const AppMapping = createPreloadableViewComponent("mapping");
 
 export default function AppShell() {
   return (
@@ -130,16 +133,16 @@ function AppShellContent() {
   }, [classificationReady]);
 
   useEffect(() => {
-    if (!classificationReady || didPreloadLazyViewsRef.current) return undefined;
+    if (didPreloadLazyViewsRef.current) return undefined;
     didPreloadLazyViewsRef.current = true;
 
     return scheduleLazyViewChunkPreload({
-      views: ["history", "data", "settings", "mapping"],
+      views: ["history", "data", "mapping", "settings", "about"],
       initialDelayMs: 1200,
       staggerMs: 200,
       idleTimeoutMs: 1500,
     });
-  }, [classificationReady]);
+  }, []);
 
   useEffect(() => {
     if (!classificationReady || didPrewarmSecondaryViewCachesRef.current) return undefined;
@@ -250,13 +253,13 @@ function AppShellContent() {
               {currentView === "settings" && (
                 <Settings
                   key="settings"
-                  onSettingsChanged={(nextSettings) => {
+                  onSettingsChanged={(nextSettings: AppSettings) => {
                     setAppSettings(nextSettings);
                     setSettingsThemeModePreview(null);
                     setSettingsColorSchemePreview(null);
                     setSettingsLanguagePreview(null);
                   }}
-                  onColorSchemeSaved={(nextSettings) => {
+                  onColorSchemeSaved={(nextSettings: AppSettings) => {
                     setAppSettings(nextSettings);
                     setSettingsColorSchemePreview(null);
                   }}

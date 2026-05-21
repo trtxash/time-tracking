@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import {
+  preloadLazyViewChunk,
+  readPreloadedViewComponent,
+  resetPreloadableViewChunksForTests,
   scheduleLazyViewChunkPreload,
   type PreloadableView,
 } from "../src/app/services/viewChunkPreloadService.ts";
@@ -55,6 +58,7 @@ function createLoaders(
     settings: buildLoader("settings"),
     mapping: buildLoader("mapping"),
     data: buildLoader("data"),
+    about: buildLoader("about"),
   };
 }
 
@@ -65,6 +69,7 @@ async function flushPromises() {
 
 let passed = 0;
 async function runTest(name: string, fn: () => void | Promise<void>) {
+  resetPreloadableViewChunksForTests();
   await fn();
   passed += 1;
   console.log(`PASS ${name}`);
@@ -203,13 +208,40 @@ await runTest("defaults preload the core lazy view chunks", async () => {
   assert.equal(scheduler.tasks[0].delayMs, 1200);
   assert.equal(scheduler.tasks[0].idleTimeoutMs, 1500);
 
-  for (let index = 0; index < 4; index += 1) {
+  for (let index = 0; index < 5; index += 1) {
     scheduler.runNext();
     await flushPromises();
   }
 
-  assert.deepEqual(calls, ["history", "data", "settings", "mapping"]);
+  assert.deepEqual(calls, ["history", "data", "mapping", "settings", "about"]);
   assert.equal(scheduler.tasks.length, 0);
+});
+
+await runTest("preload cache reuses an already loaded chunk", async () => {
+  const calls: PreloadableView[] = [];
+  const loaders = createLoaders(calls);
+
+  await preloadLazyViewChunk("history", { loaders });
+  await preloadLazyViewChunk("history", { loaders });
+
+  assert.deepEqual(calls, ["history"]);
+});
+
+await runTest("preloaded components can be read synchronously", async () => {
+  const TestView = () => null;
+  const calls: PreloadableView[] = [];
+  const loaders = {
+    ...createLoaders(calls),
+    data: async () => {
+      calls.push("data");
+      return { default: TestView };
+    },
+  };
+
+  await preloadLazyViewChunk("data", { loaders });
+
+  assert.equal(readPreloadedViewComponent("data"), TestView);
+  assert.deepEqual(calls, ["data"]);
 });
 
 console.log(`Passed ${passed} view chunk preload tests`);

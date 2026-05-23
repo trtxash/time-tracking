@@ -36,6 +36,32 @@ App note en: TBD.
 
 - 暂无。
 
+## [1.0.1] - 2026-05-23
+
+Release: 改进追踪设置中活动保持时间的说明，让无操作停止计时与短暂切屏返回的行为更清楚。
+App note: 改进追踪设置文案。
+App note en: Improved tracking settings copy.
+
+### Added
+
+- 暂无。
+
+### Changed
+
+- 将追踪设置中的“合并间隔”改为“活动保持时间”，并更新中英文说明，避免误解为只影响时间线合并。
+
+### Fixed
+
+- 暂无。
+
+### Removed
+
+- 暂无。
+
+### Internal
+
+- 暂无。
+
 ## [1.0.0] - 2026-05-21
 
 Release: 确立 1.0 稳定版本线，完成发布验证与本地桌面主路径 smoke。

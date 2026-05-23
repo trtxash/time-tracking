@@ -8,11 +8,11 @@ Local-first time tracking for Windows desktop work.
 
 English · [简体中文](README.zh-CN.md)
 
-![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-596579)
-[![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%20v2-596579)](https://tauri.app/)
-![Local first](https://img.shields.io/badge/data-local--first-596579)
-[![Downloads](https://img.shields.io/github/downloads/Ceceliaee/time-tracking/total?label=downloads&color=596579)](https://github.com/Ceceliaee/time-tracking/releases)
-[![License](https://img.shields.io/badge/license-MIT-596579)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-4f6f8f)
+[![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%20v2-4f7f8f)](https://tauri.app/)
+![Local first](https://img.shields.io/badge/data-local--first-5f7f68)
+[![Downloads](https://img.shields.io/github/downloads/Ceceliaee/time-tracking/total?label=downloads&color=b07a3a)](https://github.com/Ceceliaee/time-tracking/releases)
+[![License](https://img.shields.io/badge/license-MIT-6f647a)](LICENSE)
 
 </div>
 

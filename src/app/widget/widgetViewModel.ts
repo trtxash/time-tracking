@@ -94,9 +94,10 @@ export function buildWidgetViewModel(
   const text = UI_TEXT.widget;
   const trackableAppName = resolveTrackableAppName(activeWindow);
   const hasTrackableForegroundApp = trackableAppName !== null;
+  const isSustainedParticipationActive = trackingStatus.sustainedParticipationActive;
   const isTrackingForegroundApp = Boolean(
     activeWindow
-    && !activeWindow.isAfk
+    && (!activeWindow.isAfk || isSustainedParticipationActive)
     && hasTrackableForegroundApp
     && trackingStatus.isTrackingActive,
   );

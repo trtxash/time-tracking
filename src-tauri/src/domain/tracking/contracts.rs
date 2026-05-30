@@ -81,6 +81,29 @@ pub enum SystemMediaPlaybackType {
     Image,
 }
 
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum AudioSignalState {
+    #[default]
+    Unknown,
+    NoAudio,
+    Active,
+    ProbeUnavailable,
+    StaleSnapshot,
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum AudioProbeStatus {
+    #[default]
+    Starting,
+    Ok,
+    Timeout,
+    WindowsApiFailed,
+    BackingOff,
+    Disabled,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SustainedParticipationSignalSnapshot {
     pub is_available: bool,
@@ -89,6 +112,88 @@ pub struct SustainedParticipationSignalSnapshot {
     pub source_app_id: Option<String>,
     pub source_app_identity: Option<SustainedParticipationAppIdentity>,
     pub playback_type: Option<SystemMediaPlaybackType>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AudioSessionFact {
+    pub session_id: String,
+    pub process_id: u32,
+    pub exe_name: String,
+    pub process_path: Option<String>,
+    pub source_identity: Option<SustainedParticipationAppIdentity>,
+    pub state: AudioSignalState,
+    pub first_observed_at_ms: i64,
+    pub last_observed_at_ms: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AudioSnapshot {
+    pub generated_at_ms: i64,
+    pub last_success_at_ms: Option<i64>,
+    pub last_error_at_ms: Option<i64>,
+    pub freshness_deadline_ms: i64,
+    pub probe_status: AudioProbeStatus,
+    pub sessions: Vec<AudioSessionFact>,
+}
+
+impl AudioSnapshot {
+    pub fn unknown(now_ms: i64, ttl_ms: i64) -> Self {
+        Self {
+            generated_at_ms: now_ms,
+            last_success_at_ms: None,
+            last_error_at_ms: None,
+            freshness_deadline_ms: now_ms.saturating_add(ttl_ms),
+            probe_status: AudioProbeStatus::Starting,
+            sessions: Vec::new(),
+        }
+    }
+
+    pub fn empty_success(now_ms: i64, ttl_ms: i64) -> Self {
+        Self {
+            generated_at_ms: now_ms,
+            last_success_at_ms: Some(now_ms),
+            last_error_at_ms: None,
+            freshness_deadline_ms: now_ms.saturating_add(ttl_ms),
+            probe_status: AudioProbeStatus::Ok,
+            sessions: Vec::new(),
+        }
+    }
+
+    pub fn probe_unavailable(
+        now_ms: i64,
+        ttl_ms: i64,
+        probe_status: AudioProbeStatus,
+        last_success_at_ms: Option<i64>,
+    ) -> Self {
+        Self {
+            generated_at_ms: now_ms,
+            last_success_at_ms,
+            last_error_at_ms: Some(now_ms),
+            freshness_deadline_ms: now_ms.saturating_add(ttl_ms),
+            probe_status,
+            sessions: Vec::new(),
+        }
+    }
+
+    pub fn is_fresh(&self, now_ms: i64) -> bool {
+        now_ms <= self.freshness_deadline_ms
+    }
+
+    pub fn signal_state(&self, now_ms: i64) -> AudioSignalState {
+        if !self.is_fresh(now_ms) {
+            return AudioSignalState::StaleSnapshot;
+        }
+
+        match self.probe_status {
+            AudioProbeStatus::Ok if self.sessions.is_empty() => AudioSignalState::NoAudio,
+            AudioProbeStatus::Ok => AudioSignalState::Active,
+            AudioProbeStatus::Starting => AudioSignalState::Unknown,
+            AudioProbeStatus::Disabled
+            | AudioProbeStatus::Timeout
+            | AudioProbeStatus::WindowsApiFailed
+            | AudioProbeStatus::BackingOff => AudioSignalState::ProbeUnavailable,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -181,4 +286,59 @@ pub struct ActiveSessionSnapshot {
     pub continuity_group_start_time: i64,
     pub exe_name: String,
     pub window_title: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        AudioProbeStatus, AudioSessionFact, AudioSignalState, AudioSnapshot,
+        SustainedParticipationAppIdentity,
+    };
+
+    #[test]
+    fn no_audio_snapshot_is_successful_empty_result() {
+        let snapshot = AudioSnapshot::empty_success(1_000, 15_000);
+
+        assert_eq!(snapshot.probe_status, AudioProbeStatus::Ok);
+        assert!(snapshot.sessions.is_empty());
+        assert_eq!(snapshot.signal_state(2_000), AudioSignalState::NoAudio);
+    }
+
+    #[test]
+    fn probe_fault_is_not_treated_as_no_audio() {
+        let snapshot =
+            AudioSnapshot::probe_unavailable(1_000, 15_000, AudioProbeStatus::Timeout, Some(500));
+
+        assert_eq!(
+            snapshot.signal_state(2_000),
+            AudioSignalState::ProbeUnavailable
+        );
+    }
+
+    #[test]
+    fn stale_snapshot_becomes_stale_state() {
+        let snapshot = AudioSnapshot::empty_success(1_000, 15_000);
+
+        assert_eq!(
+            snapshot.signal_state(20_001),
+            AudioSignalState::StaleSnapshot
+        );
+    }
+
+    #[test]
+    fn active_audio_snapshot_reports_active_state() {
+        let mut snapshot = AudioSnapshot::empty_success(1_000, 15_000);
+        snapshot.sessions.push(AudioSessionFact {
+            session_id: "123:potplayer.exe".into(),
+            process_id: 123,
+            exe_name: "PotPlayer.exe".into(),
+            process_path: None,
+            source_identity: Some(SustainedParticipationAppIdentity::Vlc),
+            state: AudioSignalState::Active,
+            first_observed_at_ms: 1_000,
+            last_observed_at_ms: 1_000,
+        });
+
+        assert_eq!(snapshot.signal_state(2_000), AudioSignalState::Active);
+    }
 }

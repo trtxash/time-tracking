@@ -3,8 +3,8 @@ use crate::app::runtime_tasks;
 use crate::app::state::DesktopBehaviorState;
 use crate::app::tray::{apply_tray_visibility, setup_tray, MAIN_WINDOW_LABEL};
 use crate::engine::tracking::watchdog::RuntimeHealthState;
-use crate::platform::windows::power;
-#[cfg(any(test, not(debug_assertions)))]
+use crate::platform::windows::{audio, media, power};
+#[cfg(any(test, all(not(debug_assertions), not(time_tracker_local_build))))]
 use std::path::Path;
 use std::sync::Arc;
 use tauri::Manager;
@@ -15,7 +15,7 @@ pub fn was_launched_by_autostart() -> bool {
     std::env::args().any(|arg| arg == AUTOSTART_ARG)
 }
 
-#[cfg(any(test, not(debug_assertions)))]
+#[cfg(any(test, all(not(debug_assertions), not(time_tracker_local_build))))]
 #[cfg_attr(debug_assertions, allow(dead_code))]
 pub fn should_use_local_build_context() -> bool {
     match std::env::current_exe() {
@@ -24,7 +24,7 @@ pub fn should_use_local_build_context() -> bool {
     }
 }
 
-#[cfg(any(test, not(debug_assertions)))]
+#[cfg(any(test, all(not(debug_assertions), not(time_tracker_local_build))))]
 fn is_workspace_target_binary(path: &Path) -> bool {
     let components = path
         .components()
@@ -50,6 +50,8 @@ pub fn setup(
     launched_by_autostart: bool,
 ) -> tauri::Result<()> {
     power::start(app.handle().clone());
+    audio::start_signal_source();
+    media::start_signal_source();
 
     let app_handle = app.handle().clone();
     setup_tray(&app_handle)?;

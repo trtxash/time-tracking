@@ -1,12 +1,17 @@
 use crate::domain::tracking::{
     evaluate_sustained_participation_signal, sustained_participation_app_identity,
+    AudioProbeStatus, AudioSessionFact, AudioSignalState, AudioSnapshot,
     SustainedParticipationSignalMatchResult, SustainedParticipationSignalSnapshot,
     SustainedParticipationSignalSource,
 };
 use crate::platform::windows::foreground::{self, WindowInfo};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex, OnceLock,
+};
 use tokio::{
     task::spawn_blocking,
-    time::{timeout, Duration},
+    time::{sleep, timeout, Duration},
 };
 use windows::core::Interface;
 use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
@@ -19,6 +24,32 @@ use windows::Win32::System::Com::{
 };
 
 const AUDIO_SESSION_QUERY_TIMEOUT_SECS: u64 = 2;
+const AUDIO_SNAPSHOT_TTL_MS: i64 = 15_000;
+const AUDIO_RECONCILE_INTERVAL_SECS: u64 = 10;
+const AUDIO_SESSION_LIMIT: usize = 64;
+const AUDIO_PROBE_LOG_THROTTLE_MS: i64 = 60_000;
+
+static AUDIO_SIGNAL_SOURCE: OnceLock<Arc<AudioSignalSourceState>> = OnceLock::new();
+
+#[derive(Debug)]
+struct AudioSignalSourceState {
+    snapshot: Mutex<AudioSnapshot>,
+    probe_in_flight: Arc<AtomicBool>,
+}
+
+struct AudioProbeInFlightGuard {
+    probe_in_flight: Arc<AtomicBool>,
+}
+
+pub fn start_signal_source() {
+    let state = AUDIO_SIGNAL_SOURCE
+        .get_or_init(|| Arc::new(AudioSignalSourceState::new()))
+        .clone();
+
+    tauri::async_runtime::spawn(async move {
+        state.run().await;
+    });
+}
 
 pub async fn get_sustained_participation_signal(
     window: &WindowInfo,
@@ -27,34 +58,133 @@ pub async fn get_sustained_participation_signal(
         return SustainedParticipationSignalSnapshot::default();
     }
 
-    let window = window.clone();
-    let query = spawn_blocking(move || query_matching_audio_session(&window));
+    let now_ms = now_ms();
+    let Some(state) = AUDIO_SIGNAL_SOURCE.get() else {
+        return SustainedParticipationSignalSnapshot::default();
+    };
 
-    match timeout(Duration::from_secs(AUDIO_SESSION_QUERY_TIMEOUT_SECS), query).await {
-        Ok(Ok(Ok(Some(signal)))) => signal,
-        Ok(Ok(Ok(None))) => SustainedParticipationSignalSnapshot::default(),
-        Ok(Ok(Err(error))) => {
-            eprintln!("[audio] failed to resolve audio session signal: {error}");
-            SustainedParticipationSignalSnapshot::default()
+    state.resolve_signal_for_window(window, now_ms)
+}
+
+impl AudioSignalSourceState {
+    fn new() -> Self {
+        Self {
+            snapshot: Mutex::new(AudioSnapshot::unknown(now_ms(), AUDIO_SNAPSHOT_TTL_MS)),
+            probe_in_flight: Arc::new(AtomicBool::new(false)),
         }
-        Ok(Err(error)) => {
-            eprintln!("[audio] audio session query task failed: {error}");
-            SustainedParticipationSignalSnapshot::default()
+    }
+
+    async fn run(&self) {
+        loop {
+            self.reconcile_once().await;
+            sleep(Duration::from_secs(AUDIO_RECONCILE_INTERVAL_SECS)).await;
         }
-        Err(_) => {
-            eprintln!(
-                "[audio] timed out resolving audio session signal after {AUDIO_SESSION_QUERY_TIMEOUT_SECS}s"
-            );
-            SustainedParticipationSignalSnapshot::default()
+    }
+
+    async fn reconcile_once(&self) {
+        let started_at_ms = now_ms();
+        if self.probe_in_flight.swap(true, Ordering::AcqRel) {
+            self.replace_snapshot(self.unavailable_snapshot(AudioProbeStatus::BackingOff));
+            return;
         }
+
+        let probe_in_flight = self.probe_in_flight.clone();
+        let query = spawn_blocking(move || {
+            let _guard = AudioProbeInFlightGuard { probe_in_flight };
+            query_audio_snapshot(started_at_ms)
+        });
+
+        let snapshot =
+            match timeout(Duration::from_secs(AUDIO_SESSION_QUERY_TIMEOUT_SECS), query).await {
+                Ok(Ok(Ok(snapshot))) => snapshot,
+                Ok(Ok(Err(error))) => {
+                    log_audio_probe_error(format!("failed to reconcile audio sessions: {error}"));
+                    self.unavailable_snapshot(AudioProbeStatus::WindowsApiFailed)
+                }
+                Ok(Err(error)) => {
+                    log_audio_probe_error(format!("audio session query task failed: {error}"));
+                    self.unavailable_snapshot(AudioProbeStatus::WindowsApiFailed)
+                }
+                Err(_) => {
+                    log_audio_probe_error(format!(
+                        "timed out reconciling audio sessions after {}s",
+                        AUDIO_SESSION_QUERY_TIMEOUT_SECS
+                    ));
+                    self.unavailable_snapshot(AudioProbeStatus::Timeout)
+                }
+            };
+
+        self.replace_snapshot(snapshot);
+    }
+
+    fn unavailable_snapshot(&self, status: AudioProbeStatus) -> AudioSnapshot {
+        let last_success_at_ms = self
+            .snapshot
+            .lock()
+            .ok()
+            .and_then(|snapshot| snapshot.last_success_at_ms);
+        AudioSnapshot::probe_unavailable(
+            now_ms(),
+            AUDIO_SNAPSHOT_TTL_MS,
+            status,
+            last_success_at_ms,
+        )
+    }
+
+    fn replace_snapshot(&self, snapshot: AudioSnapshot) {
+        if let Ok(mut current) = self.snapshot.lock() {
+            *current = snapshot;
+        }
+    }
+
+    fn resolve_signal_for_window(
+        &self,
+        window: &WindowInfo,
+        now_ms: i64,
+    ) -> SustainedParticipationSignalSnapshot {
+        let snapshot = match self.snapshot.lock() {
+            Ok(snapshot) => snapshot.clone(),
+            Err(_) => return SustainedParticipationSignalSnapshot::default(),
+        };
+
+        if snapshot.signal_state(now_ms) != AudioSignalState::Active {
+            return SustainedParticipationSignalSnapshot::default();
+        }
+
+        let mut fallback_active: Option<SustainedParticipationSignalSnapshot> = None;
+        for session in snapshot.sessions {
+            let signal = session_fact_to_signal(&session);
+            match evaluate_sustained_participation_signal(
+                &window.exe_name,
+                &window.process_path,
+                &signal,
+            )
+            .match_result
+            {
+                SustainedParticipationSignalMatchResult::Matched => return signal,
+                SustainedParticipationSignalMatchResult::IdentityMismatch
+                | SustainedParticipationSignalMatchResult::Inactive => {
+                    if fallback_active.is_none() {
+                        fallback_active = Some(signal);
+                    }
+                }
+                SustainedParticipationSignalMatchResult::Unavailable => {}
+            }
+        }
+
+        fallback_active.unwrap_or_default()
     }
 }
 
-fn query_matching_audio_session(
-    window: &WindowInfo,
-) -> Result<Option<SustainedParticipationSignalSnapshot>, String> {
+impl Drop for AudioProbeInFlightGuard {
+    fn drop(&mut self) {
+        self.probe_in_flight.store(false, Ordering::Release);
+    }
+}
+
+fn query_audio_snapshot(now_ms: i64) -> Result<AudioSnapshot, String> {
     let _com = ComGuard::initialize()?;
-    let mut fallback_active: Option<SustainedParticipationSignalSnapshot> = None;
+    let mut sessions = Vec::new();
 
     unsafe {
         let enumerator: IMMDeviceEnumerator =
@@ -95,35 +225,73 @@ fn query_matching_audio_session(
             let source_identity =
                 sustained_participation_app_identity(&process_exe_name, &process_path);
 
-            let signal = SustainedParticipationSignalSnapshot {
-                is_available: true,
-                is_active: true,
-                signal_source: Some(SustainedParticipationSignalSource::AudioSession),
-                source_app_id: Some(process_exe_name),
-                source_app_identity: source_identity,
-                playback_type: None,
-            };
+            sessions.push(AudioSessionFact {
+                session_id: format!("{}:{}", process_id, process_exe_name.to_ascii_lowercase()),
+                process_id,
+                exe_name: process_exe_name,
+                process_path: if process_path.trim().is_empty() {
+                    None
+                } else {
+                    Some(process_path)
+                },
+                source_identity,
+                state: AudioSignalState::Active,
+                first_observed_at_ms: now_ms,
+                last_observed_at_ms: now_ms,
+            });
 
-            match evaluate_sustained_participation_signal(
-                &window.exe_name,
-                &window.process_path,
-                &signal,
-            )
-            .match_result
-            {
-                SustainedParticipationSignalMatchResult::Matched => return Ok(Some(signal)),
-                SustainedParticipationSignalMatchResult::IdentityMismatch
-                | SustainedParticipationSignalMatchResult::Inactive => {
-                    if fallback_active.is_none() {
-                        fallback_active = Some(signal);
-                    }
-                }
-                SustainedParticipationSignalMatchResult::Unavailable => {}
+            if sessions.len() >= AUDIO_SESSION_LIMIT {
+                break;
             }
         }
     }
 
-    Ok(fallback_active)
+    if sessions.is_empty() {
+        return Ok(AudioSnapshot::empty_success(now_ms, AUDIO_SNAPSHOT_TTL_MS));
+    }
+
+    Ok(AudioSnapshot {
+        generated_at_ms: now_ms,
+        last_success_at_ms: Some(now_ms),
+        last_error_at_ms: None,
+        freshness_deadline_ms: now_ms.saturating_add(AUDIO_SNAPSHOT_TTL_MS),
+        probe_status: AudioProbeStatus::Ok,
+        sessions,
+    })
+}
+
+fn session_fact_to_signal(session: &AudioSessionFact) -> SustainedParticipationSignalSnapshot {
+    SustainedParticipationSignalSnapshot {
+        is_available: true,
+        is_active: session.state == AudioSignalState::Active,
+        signal_source: Some(SustainedParticipationSignalSource::AudioSession),
+        source_app_id: Some(session.exe_name.clone()),
+        source_app_identity: session.source_identity,
+        playback_type: None,
+    }
+}
+
+fn log_audio_probe_error(message: String) {
+    static LAST_LOGGED_AT_MS: OnceLock<Mutex<i64>> = OnceLock::new();
+    let now_ms = now_ms();
+    let last_logged_at_ms = LAST_LOGGED_AT_MS.get_or_init(|| Mutex::new(0));
+
+    if let Ok(mut last_logged_at_ms) = last_logged_at_ms.lock() {
+        if now_ms.saturating_sub(*last_logged_at_ms) < AUDIO_PROBE_LOG_THROTTLE_MS {
+            return;
+        }
+
+        *last_logged_at_ms = now_ms;
+    }
+
+    eprintln!("[audio] {message}");
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or_default()
 }
 
 struct ComGuard {

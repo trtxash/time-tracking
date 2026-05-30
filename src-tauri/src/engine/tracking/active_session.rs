@@ -29,6 +29,7 @@ pub(crate) async fn start_session_with_continuity_group_start_time(
         let data = data.clone();
         let exe_name = window.exe_name.clone();
         let process_path = window.process_path.clone();
+        let window_class = window.window_class.clone();
         let hwnd = window.hwnd.clone();
         let root_owner_hwnd = window.root_owner_hwnd.clone();
 
@@ -37,6 +38,7 @@ pub(crate) async fn start_session_with_continuity_group_start_time(
                 &data,
                 &exe_name,
                 &process_path,
+                &window_class,
                 &root_owner_hwnd,
                 &hwnd,
             )

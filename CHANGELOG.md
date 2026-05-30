@@ -36,6 +36,36 @@ App note en: TBD.
 
 - 暂无。
 
+## [1.1.3] - 2026-05-30
+
+Release: 提高长期运行稳定性，降低 Windows 音频和窗口探测导致异常占用的风险。
+App note: 提高长期计时稳定性。
+App note en: Improved long-run tracking stability.
+
+### Added
+
+- 暂无。
+
+### Changed
+
+- 将音频与系统媒体持续参与探测改为后台快照源，主计时循环只读取最近快照，减少 Windows API 卡顿对普通计时的影响。
+
+### Fixed
+
+- 降低 Explorer shell surface 和失败图标提取反复触发高成本窗口图标 fallback 的风险。
+- 降低 tracking runtime 高频 settings 读取与 heartbeat/sample timestamp 写入对长期运行的压力。
+
+### Removed
+
+- 暂无。
+
+### Internal
+
+- 新增 `AudioSnapshot`、音频 probe 状态和 stale snapshot 语义，区分无音频、探测不可用和快照过期。
+- 为音频 probe 增加防重入保护，避免 Windows Core Audio 调用超时后继续叠加后台 blocking 任务。
+- 本地 release 构建使用独立应用身份和配置，便于和正式安装版并行验证。
+- 归档 issue #2 Windows tracking 稳定性执行方案。
+
 ## [1.1.2] - 2026-05-25
 
 Release: 降低前台窗口采样开销，减少特定 Windows 场景下 CPU 异常占用风险。

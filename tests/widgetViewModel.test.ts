@@ -146,6 +146,28 @@ await runTest("buildWidgetViewModel distinguishes sustained participation tracki
   assert.equal(viewModel.objectIconKey, "chrome.exe");
 });
 
+await runTest("buildWidgetViewModel keeps sustained participation active after generic AFK", () => {
+  const viewModel = buildWidgetViewModel(
+    { ...ACTIVE_WINDOW, isAfk: true, idleTimeMs: 300_001 },
+    {
+      ...BASE_TRACKING_STATUS,
+      sustainedParticipationEligible: true,
+      sustainedParticipationActive: true,
+      sustainedParticipationKind: "audio",
+      sustainedParticipationState: "active",
+      sustainedParticipationSignalSource: "audio-session",
+      sustainedParticipationReason: "signal-matched",
+    },
+    BASE_SETTINGS,
+    BASE_TRACKER_HEALTH,
+  );
+
+  assert.equal(viewModel.statusTone, "tracking-sustained");
+  assert.equal(viewModel.statusLabel, "\u6301\u7eed\u53c2\u4e0e");
+  assert.equal(viewModel.showObjectSlot, true);
+  assert.equal(viewModel.objectIconKey, "chrome.exe");
+});
+
 await runTest("buildWidgetViewModel prioritizes paused state", () => {
   const viewModel = buildWidgetViewModel(
     ACTIVE_WINDOW,

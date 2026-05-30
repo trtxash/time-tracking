@@ -31,6 +31,7 @@ mod window_polling;
 
 use loop_state::{
     load_tracking_loop_state, persist_tracker_runtime_timestamps, CurrentTrackingSnapshotData,
+    TrackerTimestampPersistState, TrackingSettingsCache,
 };
 use power_lifecycle::apply_power_lifecycle_event;
 pub use support::emit_tracking_data_changed;
@@ -55,15 +56,22 @@ pub async fn run<R: Runtime>(
     let mut last_emitted_window: Option<tracker::WindowInfo> = None;
     let mut pending_continuity: Option<continuity::PendingContinuity> = None;
     let mut sustained_participation_state = SustainedParticipationRuntimeState::default();
+    let mut timestamp_persist_state = TrackerTimestampPersistState::default();
+    let mut settings_cache = TrackingSettingsCache::default();
 
     loop {
         let window_info = poll_active_window_with_timeout().await?;
         let now_ms = now_ms();
         health_state.note_successful_sample(now_ms);
-        persist_tracker_runtime_timestamps(&data, now_ms).await;
-        let (tracking_state, next_sustained_participation_state) =
-            load_tracking_loop_state(&data, &window_info, now_ms, &sustained_participation_state)
-                .await;
+        persist_tracker_runtime_timestamps(&data, now_ms, &mut timestamp_persist_state).await;
+        let (tracking_state, next_sustained_participation_state) = load_tracking_loop_state(
+            &data,
+            &window_info,
+            now_ms,
+            &sustained_participation_state,
+            &mut settings_cache,
+        )
+        .await;
         sustained_participation_state = next_sustained_participation_state;
         let tracked_window = tracking_state.tracked_window;
         let continuity_group_start_time =
@@ -165,7 +173,7 @@ pub async fn run<R: Runtime>(
         let did_emit_active_window_changed =
             tracker::has_meaningful_change(last_emitted_window.as_ref(), &window_info);
         if did_emit_active_window_changed {
-            let _ = app.emit("active-window-changed", &window_info);
+            let _ = app.emit("active-window-changed", &tracked_window);
             last_emitted_window = Some(window_info.clone());
         }
 
@@ -235,11 +243,13 @@ pub async fn load_current_tracking_snapshot(
     data: &TrackingRuntimeDataStore,
 ) -> Result<CurrentTrackingSnapshotData, String> {
     let window_info = poll_active_window_with_timeout().await?;
+    let mut settings_cache = TrackingSettingsCache::default();
     let (tracking_state, _) = load_tracking_loop_state(
         data,
         &window_info,
         now_ms(),
         &SustainedParticipationRuntimeState::default(),
+        &mut settings_cache,
     )
     .await;
 

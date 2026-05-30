@@ -1,14 +1,17 @@
 use crate::data::tracking_runtime::{TrackingRuntimeDataError, TrackingRuntimeDataStore};
 use crate::platform::windows::icon as icon_extractor;
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use windows::core::PCWSTR;
 use windows::Win32::Storage::FileSystem::{
     GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
 };
 
 const VERSION_INFO_NAME_KEYS: [&str; 3] = ["FileDescription", "ProductName", "CompanyName"];
+const ICON_NEGATIVE_CACHE_TTL_MS: i64 = 60 * 60 * 1000;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -32,9 +35,14 @@ pub async fn ensure_icon_cache(
     data: &TrackingRuntimeDataStore,
     exe_name: &str,
     process_path: &str,
+    window_class: &str,
     root_owner_hwnd: &str,
     hwnd: &str,
 ) -> Result<(), TrackingRuntimeDataError> {
+    if should_skip_icon_attempt(exe_name, process_path, window_class, now_ms()) {
+        return Ok(());
+    }
+
     if data.is_icon_cached(exe_name).await? {
         return Ok(());
     }
@@ -46,16 +54,70 @@ pub async fn ensure_icon_cache(
             None
         };
 
-    let base64_icon = base64_icon
-        .or_else(|| icon_extractor::get_window_icon_base64(root_owner_hwnd))
-        .or_else(|| icon_extractor::get_window_icon_base64(hwnd));
+    let base64_icon =
+        if base64_icon.is_some() || should_skip_window_icon_fallback(exe_name, window_class) {
+            base64_icon
+        } else {
+            base64_icon
+                .or_else(|| icon_extractor::get_window_icon_base64(root_owner_hwnd))
+                .or_else(|| icon_extractor::get_window_icon_base64(hwnd))
+        };
     let Some(base64_icon) = base64_icon else {
+        remember_icon_failure(exe_name, process_path, window_class, now_ms());
         return Ok(());
     };
 
     data.upsert_icon(exe_name, &base64_icon, now_ms()).await?;
 
     Ok(())
+}
+
+fn should_skip_window_icon_fallback(exe_name: &str, window_class: &str) -> bool {
+    exe_name.eq_ignore_ascii_case("explorer.exe")
+        && !matches!(
+            window_class.to_ascii_lowercase().as_str(),
+            "cabinetwclass" | "explorewclass"
+        )
+}
+
+fn should_skip_icon_attempt(
+    exe_name: &str,
+    process_path: &str,
+    window_class: &str,
+    now_ms: i64,
+) -> bool {
+    let key = icon_negative_cache_key(exe_name, process_path, window_class);
+    icon_negative_cache()
+        .lock()
+        .ok()
+        .and_then(|cache| cache.get(&key).copied())
+        .map(|last_failed_at_ms| {
+            now_ms.saturating_sub(last_failed_at_ms) < ICON_NEGATIVE_CACHE_TTL_MS
+        })
+        .unwrap_or(false)
+}
+
+fn remember_icon_failure(exe_name: &str, process_path: &str, window_class: &str, now_ms: i64) {
+    if let Ok(mut cache) = icon_negative_cache().lock() {
+        cache.insert(
+            icon_negative_cache_key(exe_name, process_path, window_class),
+            now_ms,
+        );
+    }
+}
+
+fn icon_negative_cache_key(exe_name: &str, process_path: &str, window_class: &str) -> String {
+    format!(
+        "{}|{}|{}",
+        exe_name.trim().to_ascii_lowercase(),
+        process_path.trim().to_ascii_lowercase(),
+        window_class.trim().to_ascii_lowercase()
+    )
+}
+
+fn icon_negative_cache() -> &'static Mutex<HashMap<String, i64>> {
+    static ICON_NEGATIVE_CACHE: OnceLock<Mutex<HashMap<String, i64>>> = OnceLock::new();
+    ICON_NEGATIVE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn resolve_icon_source_path(process_path: &str, exe_name: &str) -> Option<String> {
@@ -275,4 +337,49 @@ fn now_ms() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_millis() as i64)
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        icon_negative_cache_key, remember_icon_failure, should_skip_icon_attempt,
+        should_skip_window_icon_fallback,
+    };
+
+    #[test]
+    fn explorer_shell_surface_skips_window_icon_fallback() {
+        assert!(should_skip_window_icon_fallback("explorer.exe", "Progman"));
+        assert!(should_skip_window_icon_fallback("explorer.exe", "WorkerW"));
+        assert!(!should_skip_window_icon_fallback(
+            "explorer.exe",
+            "CabinetWClass"
+        ));
+        assert!(!should_skip_window_icon_fallback("Code.exe", "Progman"));
+    }
+
+    #[test]
+    fn icon_negative_cache_uses_normalized_identity() {
+        assert_eq!(
+            icon_negative_cache_key(" App.EXE ", r" C:\Apps\App.exe ", " MainClass "),
+            "app.exe|c:\\apps\\app.exe|mainclass"
+        );
+    }
+
+    #[test]
+    fn icon_negative_cache_suppresses_recent_failures() {
+        remember_icon_failure("Missing.exe", "", "MainClass", 10_000);
+
+        assert!(should_skip_icon_attempt(
+            "missing.exe",
+            "",
+            "mainclass",
+            20_000
+        ));
+        assert!(!should_skip_icon_attempt(
+            "missing.exe",
+            "",
+            "mainclass",
+            3_700_001
+        ));
+    }
 }

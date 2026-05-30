@@ -10,6 +10,12 @@ use crate::data::repositories::tracker_settings::{
 use crate::data::tracking_runtime::TrackingRuntimeDataStore;
 use crate::domain::tracking::TrackingStatusSnapshot;
 use crate::platform::windows::foreground as tracker;
+use std::collections::HashMap;
+
+const TRACKER_TIMESTAMP_PERSIST_INTERVAL_MS: i64 = 3_000;
+const TRACKING_SETTINGS_CACHE_TTL_MS: i64 = 5_000;
+const DEFAULT_CONTINUITY_WINDOW_SECS: u64 = 180;
+const DEFAULT_SUSTAINED_PARTICIPATION_SECS: u64 = 900;
 
 pub(super) struct TrackingLoopState {
     pub continuity_window_secs: u64,
@@ -24,10 +30,43 @@ pub struct CurrentTrackingSnapshotData {
     pub status: TrackingStatusSnapshot,
 }
 
+#[derive(Debug, Default)]
+pub(super) struct TrackerTimestampPersistState {
+    last_persisted_at_ms: Option<i64>,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct TrackingSettingsCache {
+    settings: Option<CachedTrackingSettings>,
+    capture_window_title_by_exe: HashMap<String, CachedCaptureWindowTitleSetting>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CachedTrackingSettings {
+    loaded_at_ms: i64,
+    continuity_window_secs: u64,
+    sustained_participation_secs: u64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CachedCaptureWindowTitleSetting {
+    loaded_at_ms: i64,
+    capture_window_title: bool,
+}
+
 pub(super) async fn persist_tracker_runtime_timestamps(
     data: &TrackingRuntimeDataStore,
     now_ms: i64,
+    state: &mut TrackerTimestampPersistState,
 ) {
+    if state
+        .last_persisted_at_ms
+        .map(|last| now_ms.saturating_sub(last) < TRACKER_TIMESTAMP_PERSIST_INTERVAL_MS)
+        .unwrap_or(false)
+    {
+        return;
+    }
+
     for (setting_key, error_context) in [
         (TRACKER_LAST_SUCCESSFUL_SAMPLE_KEY, "sample timestamp"),
         (TRACKER_LAST_HEARTBEAT_KEY, "heartbeat"),
@@ -36,6 +75,8 @@ pub(super) async fn persist_tracker_runtime_timestamps(
             log_tracker_error(format!("failed to save tracker {error_context}: {error}"));
         }
     }
+
+    state.last_persisted_at_ms = Some(now_ms);
 }
 
 pub(super) async fn load_tracking_loop_state(
@@ -43,46 +84,15 @@ pub(super) async fn load_tracking_loop_state(
     window_info: &tracker::WindowInfo,
     now_ms: i64,
     previous_state: &SustainedParticipationRuntimeState,
+    settings_cache: &mut TrackingSettingsCache,
 ) -> (TrackingLoopState, SustainedParticipationRuntimeState) {
-    let continuity_window_secs = match data.load_timeline_merge_gap_secs(180).await {
-        Ok(value) => value,
-        Err(error) => {
-            log_tracker_error(format!("failed to load continuity window setting: {error}"));
-            180
-        }
-    };
-
-    let tracking_paused = match data.load_tracking_paused_setting().await {
-        Ok(value) => value,
-        Err(error) => {
-            log_tracker_error(format!("failed to load tracking pause setting: {error}"));
-            false
-        }
-    };
-
-    let sustained_participation_secs = match data.load_idle_timeout_secs(300).await {
-        Ok(value) => value,
-        Err(error) => {
-            log_tracker_error(format!(
-                "failed to load sustained participation setting: {error}"
-            ));
-            300
-        }
-    };
-
-    let capture_window_title = match data
-        .load_capture_window_title_setting_for_app(&window_info.exe_name)
-        .await
-    {
-        Ok(value) => value,
-        Err(error) => {
-            log_tracker_error(format!(
-                "failed to load app capture title setting for {}: {error}",
-                window_info.exe_name
-            ));
-            true
-        }
-    };
+    let cached_settings = settings_cache.load_tracking_settings(data, now_ms).await;
+    let continuity_window_secs = cached_settings.continuity_window_secs;
+    let sustained_participation_secs = cached_settings.sustained_participation_secs;
+    let tracking_paused = load_tracking_paused(data).await;
+    let capture_window_title = settings_cache
+        .load_capture_window_title_setting(data, &window_info.exe_name, now_ms)
+        .await;
 
     let mut tracked_window = window_info.clone();
     if !capture_window_title {
@@ -117,4 +127,153 @@ pub(super) async fn load_tracking_loop_state(
         },
         next_sustained_participation_state,
     )
+}
+
+impl TrackingSettingsCache {
+    async fn load_tracking_settings(
+        &mut self,
+        data: &TrackingRuntimeDataStore,
+        now_ms: i64,
+    ) -> CachedTrackingSettings {
+        if let Some(settings) = self.settings {
+            if now_ms.saturating_sub(settings.loaded_at_ms) < TRACKING_SETTINGS_CACHE_TTL_MS {
+                return settings;
+            }
+        }
+
+        let continuity_window_secs = match data
+            .load_timeline_merge_gap_secs(DEFAULT_CONTINUITY_WINDOW_SECS)
+            .await
+        {
+            Ok(value) => value,
+            Err(error) => {
+                log_tracker_error(format!("failed to load continuity window setting: {error}"));
+                self.settings
+                    .map(|settings| settings.continuity_window_secs)
+                    .unwrap_or(DEFAULT_CONTINUITY_WINDOW_SECS)
+            }
+        };
+
+        let sustained_participation_secs = match data
+            .load_idle_timeout_secs(DEFAULT_SUSTAINED_PARTICIPATION_SECS)
+            .await
+        {
+            Ok(value) => value,
+            Err(error) => {
+                log_tracker_error(format!(
+                    "failed to load sustained participation setting: {error}"
+                ));
+                self.settings
+                    .map(|settings| settings.sustained_participation_secs)
+                    .unwrap_or(DEFAULT_SUSTAINED_PARTICIPATION_SECS)
+            }
+        };
+
+        let settings = CachedTrackingSettings {
+            loaded_at_ms: now_ms,
+            continuity_window_secs,
+            sustained_participation_secs,
+        };
+        self.settings = Some(settings);
+        settings
+    }
+
+    async fn load_capture_window_title_setting(
+        &mut self,
+        data: &TrackingRuntimeDataStore,
+        exe_name: &str,
+        now_ms: i64,
+    ) -> bool {
+        let exe_key = exe_name.to_ascii_lowercase();
+        if let Some(cached) = self.capture_window_title_by_exe.get(&exe_key) {
+            if now_ms.saturating_sub(cached.loaded_at_ms) < TRACKING_SETTINGS_CACHE_TTL_MS {
+                return cached.capture_window_title;
+            }
+        }
+
+        let capture_window_title = match data
+            .load_capture_window_title_setting_for_app(exe_name)
+            .await
+        {
+            Ok(value) => value,
+            Err(error) => {
+                log_tracker_error(format!(
+                    "failed to load app capture title setting for {exe_name}: {error}"
+                ));
+                self.capture_window_title_by_exe
+                    .get(&exe_key)
+                    .map(|cached| cached.capture_window_title)
+                    .unwrap_or(true)
+            }
+        };
+
+        self.capture_window_title_by_exe.insert(
+            exe_key,
+            CachedCaptureWindowTitleSetting {
+                loaded_at_ms: now_ms,
+                capture_window_title,
+            },
+        );
+        capture_window_title
+    }
+}
+
+async fn load_tracking_paused(data: &TrackingRuntimeDataStore) -> bool {
+    match data.load_tracking_paused_setting().await {
+        Ok(value) => value,
+        Err(error) => {
+            log_tracker_error(format!("failed to load tracking pause setting: {error}"));
+            false
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::repositories::tracker_settings;
+    use crate::data::schema as db_schema;
+    use sqlx::{Executor, SqlitePool};
+
+    async fn setup_test_db() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        pool.execute(db_schema::CURRENT_BASELINE_SCHEMA_SQL)
+            .await
+            .unwrap();
+        pool
+    }
+
+    #[test]
+    fn tracking_settings_default_sustained_participation_matches_release_profile() {
+        tauri::async_runtime::block_on(async {
+            let pool = setup_test_db().await;
+            let data = TrackingRuntimeDataStore::new(pool);
+            let mut cache = TrackingSettingsCache::default();
+
+            let settings = cache.load_tracking_settings(&data, 1_000).await;
+
+            assert_eq!(settings.continuity_window_secs, 180);
+            assert_eq!(settings.sustained_participation_secs, 900);
+        });
+    }
+
+    #[test]
+    fn tracking_pause_setting_is_loaded_fresh() {
+        tauri::async_runtime::block_on(async {
+            let pool = setup_test_db().await;
+            let data = TrackingRuntimeDataStore::new(pool.clone());
+
+            assert!(!load_tracking_paused(&data).await);
+
+            tracker_settings::save_tracking_paused_setting(&pool, true)
+                .await
+                .unwrap();
+            assert!(load_tracking_paused(&data).await);
+
+            tracker_settings::save_tracking_paused_setting(&pool, false)
+                .await
+                .unwrap();
+            assert!(!load_tracking_paused(&data).await);
+        });
+    }
 }

@@ -351,7 +351,7 @@ export default function QuietColorField({
                 value={hexDraft}
                 onChange={(event) => onHexDraftChange(event.target.value)}
                 onBlur={onHexDraftBlur}
-                className="qp-color-text-input"
+                className="qp-input qp-color-text-input"
               />
             </div>
           )}
@@ -366,7 +366,7 @@ export default function QuietColorField({
                   max={255}
                   value={rgb.r}
                   onChange={(event) => onRgbInput("r", event.target.value)}
-                  className="qp-color-number-input"
+                  className="qp-input qp-color-number-input"
                 />
                 <input
                   type="number"
@@ -374,7 +374,7 @@ export default function QuietColorField({
                   max={255}
                   value={rgb.g}
                   onChange={(event) => onRgbInput("g", event.target.value)}
-                  className="qp-color-number-input"
+                  className="qp-input qp-color-number-input"
                 />
                 <input
                   type="number"
@@ -382,7 +382,7 @@ export default function QuietColorField({
                   max={255}
                   value={rgb.b}
                   onChange={(event) => onRgbInput("b", event.target.value)}
-                  className="qp-color-number-input"
+                  className="qp-input qp-color-number-input"
                 />
               </div>
             </div>
@@ -398,7 +398,7 @@ export default function QuietColorField({
                   max={360}
                   value={hsl.h}
                   onChange={(event) => onHslInput("h", event.target.value)}
-                  className="qp-color-number-input"
+                  className="qp-input qp-color-number-input"
                 />
                 <input
                   type="number"
@@ -406,7 +406,7 @@ export default function QuietColorField({
                   max={100}
                   value={hsl.s}
                   onChange={(event) => onHslInput("s", event.target.value)}
-                  className="qp-color-number-input"
+                  className="qp-input qp-color-number-input"
                 />
                 <input
                   type="number"
@@ -414,7 +414,7 @@ export default function QuietColorField({
                   max={100}
                   value={hsl.l}
                   onChange={(event) => onHslInput("l", event.target.value)}
-                  className="qp-color-number-input"
+                  className="qp-input qp-color-number-input"
                 />
               </div>
             </div>

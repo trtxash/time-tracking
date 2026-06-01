@@ -41,6 +41,9 @@ const BASE_SETTINGS: AppSettings = {
   launchAtLogin: false,
   startMinimized: false,
   onboardingCompleted: false,
+  localApiEnabled: false,
+  localApiPort: 17321,
+  localApiToken: "",
 };
 
 function buildSettings(overrides: Partial<AppSettings> = {}): AppSettings {

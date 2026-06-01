@@ -199,6 +199,48 @@
   color: var(--qp-text-primary);
 }
 
+.qp-input {
+  min-height: 34px;
+  border-radius: var(--qp-radius-control);
+  border: 1px solid var(--qp-border-subtle);
+  background: var(--qp-bg-panel);
+  color: var(--qp-text-primary);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+  transition:
+    border-color var(--qp-motion-fast) var(--qp-motion-ease),
+    background-color var(--qp-motion-fast) var(--qp-motion-ease);
+}
+
+.qp-input:focus,
+.qp-input:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--qp-accent-default) 36%, var(--qp-border-subtle));
+  background: var(--qp-bg-elevated);
+}
+
+.qp-input::placeholder {
+  color: var(--qp-text-tertiary);
+  font-weight: 500;
+}
+
+.qp-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.qp-input[type="number"]::-webkit-outer-spin-button,
+.qp-input[type="number"]::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.qp-input[type="number"] {
+  appearance: textfield;
+}
+
 .qp-chip {
   border-radius: var(--qp-radius-chip);
   border: 1px solid var(--qp-border-subtle);

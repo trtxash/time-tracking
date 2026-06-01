@@ -6,6 +6,9 @@ import {
   SettingsRuntimeAdapterService,
 } from "../src/features/settings/services/settingsRuntimeAdapterService.ts";
 import {
+  saveSettingsPageStateWithDeps,
+} from "../src/features/settings/hooks/settingsPageStateInteractions.ts";
+import {
   runBackupExportFlow,
   runBackupRestoreFlow,
   runSettingsCleanupFlow,
@@ -283,6 +286,46 @@ await runTest("commitSettingsPatchWithDeps does not attempt runtime sync when pe
   );
 
   assert.deepEqual(events, ["persist"]);
+});
+
+await runTest("saveSettingsPageStateWithDeps disables local API when token is empty", async () => {
+  let committedPatch: Partial<AppSettings> | null = null;
+  const savedSettings = buildSettings({
+    localApiEnabled: true,
+    localApiToken: "existing-token",
+  });
+  const draftSettings = buildSettings({
+    localApiEnabled: true,
+    localApiToken: "   ",
+  });
+
+  const result = await saveSettingsPageStateWithDeps({
+    savedSettings,
+    draftSettings,
+    appVersion: "1.2.0",
+    hasUnsavedChanges: true,
+    saveStatus: "idle",
+  }, {
+    buildPatch: SettingsRuntimeAdapterService.buildSettingsPatch,
+    commitPatch: async (patch) => {
+      committedPatch = patch;
+      return {
+        persisted: true,
+        runtimeSync: "not-needed",
+        runtimeSyncErrors: [],
+      };
+    },
+  });
+
+  assert.equal(result.accepted, true);
+  assert.equal(result.nextSavedSettings?.localApiEnabled, false);
+  assert.equal(result.nextSavedSettings?.localApiToken, "");
+  assert.equal(result.nextDraftSettings?.localApiEnabled, false);
+  assert.equal(result.nextBootstrap?.settings.localApiEnabled, false);
+  assert.deepEqual(committedPatch, {
+    localApiEnabled: false,
+    localApiToken: "",
+  });
 });
 
 await runTest("normalizeSettingsRecord accepts current minimize behavior values", () => {

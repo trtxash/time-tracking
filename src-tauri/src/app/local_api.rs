@@ -1,17 +1,25 @@
-use crate::commands::tracking::CurrentTrackingSnapshot;
 use crate::data::repositories::app_settings;
 use crate::data::sqlite_pool::wait_for_sqlite_pool;
 use crate::data::tracking_runtime::TrackingRuntimeDataStore;
 use crate::domain::settings::LocalApiSettings;
+use crate::domain::tracking::TrackingStatusSnapshot;
 use crate::engine::tracking::runtime::load_current_tracking_snapshot;
 use crate::platform::local_api::{
     self, LocalApiRuntimeDeps, LocalApiRuntimeState, LOCAL_API_ACTIVE_WINDOW_EVENT,
     LOCAL_API_SETTINGS_CHANGED_EVENT, LOCAL_API_TRACKING_DATA_EVENT,
 };
+use crate::platform::windows::foreground::WindowInfo;
+use serde::Serialize;
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
 use tauri::{AppHandle, Listener, Manager, Runtime};
+
+#[derive(Clone, Debug, Serialize)]
+struct LocalApiTrackingSnapshot {
+    window: WindowInfo,
+    status: TrackingStatusSnapshot,
+}
 
 pub fn start<R: Runtime + 'static>(app: AppHandle<R>) {
     if app.try_state::<LocalApiRuntimeState>().is_none() {
@@ -111,7 +119,7 @@ async fn load_snapshot_message<R: Runtime>(app: AppHandle<R>) -> Option<String> 
     let pool = wait_for_sqlite_pool(&app).await.ok()?;
     let data = TrackingRuntimeDataStore::new(pool);
     let snapshot = load_current_tracking_snapshot(&data).await.ok()?;
-    let payload = CurrentTrackingSnapshot {
+    let payload = LocalApiTrackingSnapshot {
         window: snapshot.window,
         status: snapshot.status,
     };

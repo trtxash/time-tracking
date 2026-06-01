@@ -45,6 +45,15 @@ export interface SettingsCancelFlowResult {
   toastKind: "cancelled" | null;
 }
 
+function normalizeSettingsForSave(settings: AppSettings): AppSettings {
+  const localApiToken = settings.localApiToken.trim();
+  return {
+    ...settings,
+    localApiEnabled: settings.localApiEnabled && localApiToken.length > 0,
+    localApiToken,
+  };
+}
+
 export async function saveSettingsPageStateWithDeps(
   input: SettingsSaveFlowInput,
   deps: SettingsSaveFlowDeps,
@@ -89,9 +98,10 @@ export async function saveSettingsPageStateWithDeps(
   }
 
   try {
-    const patch = deps.buildPatch(input.savedSettings, input.draftSettings);
+    const normalizedDraftSettings = normalizeSettingsForSave(input.draftSettings);
+    const patch = deps.buildPatch(input.savedSettings, normalizedDraftSettings);
     const commitResult = await deps.commitPatch(patch);
-    const nextSettings = { ...input.draftSettings };
+    const nextSettings = { ...normalizedDraftSettings };
     return {
       accepted: true,
       skippedReason: null,

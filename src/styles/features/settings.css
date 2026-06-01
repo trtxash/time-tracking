@@ -153,3 +153,45 @@
   border-color: var(--qp-border-strong);
   color: var(--qp-text-primary);
 }
+
+.settings-local-api-address-input {
+  width: 24ch;
+  max-width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.settings-token-action-button {
+  position: absolute;
+  top: 50%;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  color: var(--qp-text-tertiary);
+  transform: translateY(-50%);
+}
+
+.settings-token-random-button {
+  right: 34px;
+}
+
+.settings-token-visibility-button {
+  right: 6px;
+}
+
+.settings-token-action-button:hover {
+  background: var(--qp-bg-elevated);
+  color: var(--qp-text-primary);
+}
+
+.settings-token-action-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--qp-accent-default) 42%, transparent);
+  outline-offset: 1px;
+}
+
+.settings-token-action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}

@@ -65,7 +65,7 @@ export default function QuietPromptDialog({
             onConfirm();
           }
         }}
-        className="qp-control qp-dialog-input"
+        className="qp-input qp-dialog-input"
       />
     </QuietDialog>
   );

@@ -99,7 +99,7 @@ export default function AppMappingCandidateCard({
                       onNameEditCancel();
                     }
                   }}
-                  className="max-w-[240px] truncate rounded-[8px] border border-[var(--qp-border-subtle)] bg-[var(--qp-bg-panel)] px-2 py-1 text-[15px] font-semibold text-[var(--qp-text-primary)] outline-none disabled:cursor-not-allowed"
+                  className="qp-input max-w-[240px] truncate px-2 py-1 text-[15px]"
                 />
               ) : (
                 <span className="truncate rounded-[8px] px-2 py-1 text-[15px] font-semibold text-[var(--qp-text-primary)]">

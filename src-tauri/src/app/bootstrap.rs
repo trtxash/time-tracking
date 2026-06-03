@@ -90,7 +90,15 @@ fn register_invoke_handlers(builder: tauri::Builder<tauri::Wry>) -> tauri::Build
         commands::backup::cmd_pick_backup_file,
         commands::backup::cmd_preview_backup,
         commands::backup::cmd_export_backup,
-        commands::backup::cmd_restore_backup
+        commands::backup::cmd_restore_backup,
+        commands::backup::cmd_save_webdav_backup_secret,
+        commands::backup::cmd_delete_webdav_backup_secret,
+        commands::backup::cmd_has_webdav_backup_secret,
+        commands::backup::cmd_reveal_webdav_backup_secret,
+        commands::backup::cmd_test_webdav_backup_target,
+        commands::backup::cmd_upload_webdav_backup,
+        commands::backup::cmd_list_webdav_backups,
+        commands::backup::cmd_download_webdav_backup
     ])
 }
 

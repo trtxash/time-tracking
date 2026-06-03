@@ -18,7 +18,7 @@ App note en: TBD.
 
 ### Added
 
-- 暂无。
+- 新增 WebDAV 远程备份目标，可将结构化备份上传到用户自己的 WebDAV 存储，并从远端备份下载、预览后恢复。Refs [#5](https://github.com/Ceceliaee/time-tracking/issues/5)
 
 ### Changed
 

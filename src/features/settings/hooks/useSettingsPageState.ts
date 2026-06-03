@@ -6,8 +6,9 @@ import { getSettingsBootstrapCache, setSettingsBootstrapCache } from "../service
 import { loadSettingsPageBootstrap } from "../services/settingsBootstrapService.ts";
 import { SettingsRuntimeAdapterService } from "../services/settingsRuntimeAdapterService";
 import {
+  commitPreparedBackupRestoreFlow,
+  prepareBackupRestoreFlow,
   runBackupExportFlow,
-  runBackupRestoreFlow,
   runSettingsCleanupFlow,
 } from "../services/settingsPageActions.ts";
 import {
@@ -17,7 +18,8 @@ import {
 import type { AppSettings } from "../../../shared/settings/appSettings";
 import type { ThemeLibrary } from "../../../shared/settings/colorSchemeOptions.ts";
 import type { CleanupRange } from "../types";
-import type { BackupRestoreStrategy } from "../services/settingsRuntimeAdapterService.ts";
+import type { BackupRestorePreparation, BackupRestoreStrategy } from "../services/settingsRuntimeAdapterService.ts";
+import { useRemoteBackupState } from "./useRemoteBackupState.ts";
 
 const buildCleanupOptions = (): Array<{ value: CleanupRange; label: string }> => [
   { value: 180, label: UI_TEXT.settings.cleanupRangeLabels[180] },
@@ -66,7 +68,8 @@ export function useSettingsPageState({
   const [isCleaning, setIsCleaning] = useState(false);
   const [exportPath, setExportPath] = useState("");
   const [restorePath, setRestorePath] = useState("");
-  const [restoreStrategy, setRestoreStrategy] = useState<BackupRestoreStrategy>("replace");
+  const [restoreStrategy, setRestoreStrategy] = useState<BackupRestoreStrategy>("merge");
+  const [pendingRestorePreparation, setPendingRestorePreparation] = useState<BackupRestorePreparation | null>(null);
   const [isExportingBackup, setIsExportingBackup] = useState(false);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
   const [appVersion, setAppVersion] = useState(() => initialBootstrap?.appVersion ?? "-");
@@ -76,6 +79,13 @@ export function useSettingsPageState({
   const notify = useCallback((message: string, tone: QuietToastTone = "info") => {
     onToast?.(message, tone);
   }, [onToast]);
+
+  const remoteBackup = useRemoteBackupState({
+    confirm,
+    notify,
+    restoreBackup: SettingsRuntimeAdapterService.restoreBackup,
+    reload: () => window.location.reload(),
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -275,13 +285,28 @@ export function useSettingsPageState({
     });
   }, [exportPath, isExportingBackup, notify]);
 
-  const handleRestoreBackup = useCallback(async () => {
+  const handlePrepareRestoreBackup = useCallback(async () => {
     if (isRestoringBackup) return;
-    await runBackupRestoreFlow({
+    const preparation = await prepareBackupRestoreFlow({
       initialPath: restorePath,
-      restoreStrategy,
       prepareBackupRestore: SettingsRuntimeAdapterService.prepareBackupRestore,
       setRestorePath,
+      notify,
+      onExecutionStart: () => setIsRestoringBackup(true),
+      onExecutionEnd: () => setIsRestoringBackup(false),
+      reportError: (message, error) => {
+        console.error(message, error);
+      },
+    });
+    setPendingRestorePreparation(preparation);
+    return Boolean(preparation);
+  }, [isRestoringBackup, notify, restorePath]);
+
+  const handleRestoreBackup = useCallback(async (selectedRestoreStrategy: BackupRestoreStrategy = restoreStrategy) => {
+    if (isRestoringBackup || !pendingRestorePreparation) return;
+    await commitPreparedBackupRestoreFlow({
+      preparation: pendingRestorePreparation,
+      restoreStrategy: selectedRestoreStrategy,
       confirm,
       restoreBackup: SettingsRuntimeAdapterService.restoreBackup,
       notify,
@@ -292,7 +317,12 @@ export function useSettingsPageState({
         console.error(message, error);
       },
     });
-  }, [confirm, isRestoringBackup, notify, restorePath, restoreStrategy]);
+    setPendingRestorePreparation(null);
+  }, [confirm, isRestoringBackup, notify, pendingRestorePreparation, restoreStrategy]);
+
+  const clearPendingRestoreBackup = useCallback(() => {
+    setPendingRestorePreparation(null);
+  }, []);
 
   const handleOpenReleaseNotes = useCallback(async () => {
     try {
@@ -355,7 +385,10 @@ export function useSettingsPageState({
     isRestoringBackup,
     handleCleanup,
     handleExportBackup,
+    handlePrepareRestoreBackup,
     handleRestoreBackup,
+    clearPendingRestoreBackup,
+    remoteBackup,
     handleOpenReleaseNotes,
     handleOpenFeedback,
     idleTimeoutMinutes,

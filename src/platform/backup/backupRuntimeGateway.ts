@@ -67,7 +67,7 @@ function mapRawBackupPreview(raw: RawBackupPreview): BackupPreview {
   };
 }
 
-function parseBackupPreview(value: unknown): BackupPreview {
+export function parseBackupPreview(value: unknown): BackupPreview {
   if (!isRawBackupPreview(value)) {
     throw new Error("Received invalid backup preview payload");
   }

@@ -9,6 +9,8 @@ import QuietSegmentedFilter from "../../../shared/components/QuietSegmentedFilte
 import QuietDialog from "../../../shared/components/QuietDialog";
 import type { CleanupRange } from "../types";
 import type { BackupRestoreStrategy } from "../services/settingsRuntimeAdapterService.ts";
+import type { RemoteBackupEntry, RemoteBackupState } from "../hooks/useRemoteBackupState.ts";
+import SettingsRemoteBackupPanel from "./SettingsRemoteBackupPanel";
 
 type CleanupOption = { value: CleanupRange; label: string };
 
@@ -23,7 +25,10 @@ type SettingsDataSafetyPanelProps = {
   onRestoreStrategyChange: (value: BackupRestoreStrategy) => void;
   onCleanup: () => void;
   onExportBackup: () => void;
-  onRestoreBackup: () => void;
+  onPrepareRestoreBackup: () => Promise<boolean | void>;
+  onRestoreBackup: (restoreStrategy: BackupRestoreStrategy) => void;
+  onClearPendingRestoreBackup: () => void;
+  remoteBackup: RemoteBackupState;
 };
 
 export default function SettingsDataSafetyPanel({
@@ -37,13 +42,82 @@ export default function SettingsDataSafetyPanel({
   onRestoreStrategyChange,
   onCleanup,
   onExportBackup,
+  onPrepareRestoreBackup,
   onRestoreBackup,
+  onClearPendingRestoreBackup,
+  remoteBackup,
 }: SettingsDataSafetyPanelProps) {
   const [strategyDialogOpen, setStrategyDialogOpen] = useState(false);
+  const [restoreStrategySource, setRestoreStrategySource] = useState<"local" | "remote">("local");
+  const [pendingRemoteRestoreEntry, setPendingRemoteRestoreEntry] = useState<RemoteBackupEntry | null>(null);
+  const [backupTargetDialogOpen, setBackupTargetDialogOpen] = useState(false);
+  const [restoreSourceDialogOpen, setRestoreSourceDialogOpen] = useState(false);
+  const hasRemoteBackupTarget = Boolean(remoteBackup.config && remoteBackup.hasSecret);
   const restoreStrategyOptions: Array<{ value: BackupRestoreStrategy; label: string }> = [
-    { value: "replace", label: UI_TEXT.settings.restoreStrategyOptions.replace },
     { value: "merge", label: UI_TEXT.settings.restoreStrategyOptions.merge },
+    { value: "replace", label: UI_TEXT.settings.restoreStrategyOptions.replace },
   ];
+  const busy = isExportingBackup
+    || isRestoringBackup
+    || remoteBackup.isUploading
+    || remoteBackup.isListing
+    || remoteBackup.isDownloading;
+
+  const handleBackupAction = () => {
+    if (hasRemoteBackupTarget) {
+      setBackupTargetDialogOpen(true);
+      return;
+    }
+    onExportBackup();
+  };
+
+  const handleRestoreAction = () => {
+    if (hasRemoteBackupTarget) {
+      setRestoreSourceDialogOpen(true);
+      return;
+    }
+    void prepareLocalRestore();
+  };
+
+  const prepareLocalRestore = async () => {
+    setRestoreStrategySource("local");
+    setPendingRemoteRestoreEntry(null);
+    const prepared = await onPrepareRestoreBackup();
+    if (prepared) {
+      setStrategyDialogOpen(true);
+    }
+  };
+
+  const openRemoteRestoreList = async () => {
+    setRestoreStrategySource("remote");
+    setPendingRemoteRestoreEntry(null);
+    await remoteBackup.openRestoreDialog();
+  };
+
+  const handleRemoteRestoreEntrySelected = (entry: RemoteBackupEntry) => {
+    remoteBackup.closeRestoreDialog();
+    setRestoreStrategySource("remote");
+    setPendingRemoteRestoreEntry(entry);
+    setStrategyDialogOpen(true);
+  };
+
+  const confirmRestoreStrategy = () => {
+    setStrategyDialogOpen(false);
+    if (restoreStrategySource === "remote") {
+      if (pendingRemoteRestoreEntry) {
+        void remoteBackup.restoreEntry(pendingRemoteRestoreEntry, restoreStrategy);
+      }
+      setPendingRemoteRestoreEntry(null);
+      return;
+    }
+    onRestoreBackup(restoreStrategy);
+  };
+
+  const closeStrategyDialog = () => {
+    setStrategyDialogOpen(false);
+    setPendingRemoteRestoreEntry(null);
+    onClearPendingRestoreBackup();
+  };
 
   return (
     <>
@@ -78,11 +152,11 @@ export default function SettingsDataSafetyPanel({
                   </div>
                   <button
                     type="button"
-                    onClick={onExportBackup}
-                    disabled={isExportingBackup || isRestoringBackup}
-                    className="qp-button-secondary shrink-0 rounded-[7px] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--qp-text-secondary)] disabled:opacity-50"
+                    onClick={handleBackupAction}
+                    disabled={busy}
+                    className="qp-button-secondary h-8 shrink-0 rounded-[8px] px-3 text-xs font-semibold text-[var(--qp-text-secondary)] disabled:opacity-50"
                   >
-                    {isExportingBackup ? UI_TEXT.settings.backupExporting : UI_TEXT.settings.backupExportAction}
+                    {isExportingBackup || remoteBackup.isUploading ? UI_TEXT.settings.backupExporting : UI_TEXT.settings.backupExportAction}
                   </button>
                 </div>
               </QuietActionRow>
@@ -102,15 +176,20 @@ export default function SettingsDataSafetyPanel({
                   </div>
                   <button
                     type="button"
-                    onClick={() => setStrategyDialogOpen(true)}
-                    disabled={isExportingBackup || isRestoringBackup}
-                    className="qp-button-secondary shrink-0 rounded-[7px] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--qp-text-secondary)] disabled:opacity-50"
+                    onClick={handleRestoreAction}
+                    disabled={busy}
+                    className="qp-button-secondary h-8 shrink-0 rounded-[8px] px-3 text-xs font-semibold text-[var(--qp-text-secondary)] disabled:opacity-50"
                   >
-                    {isRestoringBackup ? UI_TEXT.settings.backupRestoring : UI_TEXT.settings.backupRestoreAction}
+                    {isRestoringBackup || remoteBackup.isListing || remoteBackup.isDownloading ? UI_TEXT.settings.backupRestoring : UI_TEXT.settings.backupRestoreAction}
                   </button>
                 </div>
               </QuietActionRow>
             </div>
+
+            <SettingsRemoteBackupPanel
+              remoteBackup={remoteBackup}
+              onRestoreEntrySelected={handleRemoteRestoreEntrySelected}
+            />
           </QuietSubpanel>
 
           <QuietSubpanel tone="danger" className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -142,16 +221,114 @@ export default function SettingsDataSafetyPanel({
       </section>
 
       <QuietDialog
+        open={backupTargetDialogOpen}
+        title={UI_TEXT.settings.backupTargetTitle}
+        description={UI_TEXT.settings.backupTargetHint}
+        onClose={() => setBackupTargetDialogOpen(false)}
+        closeOnBackdrop={!busy}
+        actions={(
+          <button
+            type="button"
+            onClick={() => setBackupTargetDialogOpen(false)}
+            disabled={busy}
+            className="qp-button-secondary h-8 min-h-0 rounded-[8px] px-3 text-xs font-semibold leading-none disabled:opacity-50"
+          >
+            {UI_TEXT.common.cancel}
+          </button>
+        )}
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <QuietActionRow>
+            <button
+              type="button"
+              onClick={() => {
+                setBackupTargetDialogOpen(false);
+                onExportBackup();
+              }}
+              disabled={busy}
+              className="block w-full border-0 bg-transparent p-0 text-left disabled:opacity-50"
+            >
+              <p className="text-sm font-semibold text-[var(--qp-text-primary)]">{UI_TEXT.settings.backupTargetLocalTitle}</p>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--qp-text-tertiary)]">{UI_TEXT.settings.backupTargetLocalHint}</p>
+            </button>
+          </QuietActionRow>
+          <QuietActionRow>
+            <button
+              type="button"
+              onClick={() => {
+                setBackupTargetDialogOpen(false);
+                void remoteBackup.uploadBackup();
+              }}
+              disabled={busy}
+              className="block w-full border-0 bg-transparent p-0 text-left disabled:opacity-50"
+            >
+              <p className="text-sm font-semibold text-[var(--qp-text-primary)]">{UI_TEXT.settings.backupTargetRemoteTitle}</p>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--qp-text-tertiary)]">{UI_TEXT.settings.backupTargetRemoteHint}</p>
+            </button>
+          </QuietActionRow>
+        </div>
+      </QuietDialog>
+
+      <QuietDialog
+        open={restoreSourceDialogOpen}
+        title={UI_TEXT.settings.restoreSourceTitle}
+        description={UI_TEXT.settings.restoreSourceHint}
+        onClose={() => setRestoreSourceDialogOpen(false)}
+        closeOnBackdrop={!busy}
+        actions={(
+          <button
+            type="button"
+            onClick={() => setRestoreSourceDialogOpen(false)}
+            disabled={busy}
+            className="qp-button-secondary h-8 min-h-0 rounded-[8px] px-3 text-xs font-semibold leading-none disabled:opacity-50"
+          >
+            {UI_TEXT.common.cancel}
+          </button>
+        )}
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <QuietActionRow>
+            <button
+              type="button"
+              onClick={() => {
+                setRestoreSourceDialogOpen(false);
+                void prepareLocalRestore();
+              }}
+              disabled={busy}
+              className="block w-full border-0 bg-transparent p-0 text-left disabled:opacity-50"
+            >
+              <p className="text-sm font-semibold text-[var(--qp-text-primary)]">{UI_TEXT.settings.restoreSourceLocalTitle}</p>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--qp-text-tertiary)]">{UI_TEXT.settings.restoreSourceLocalHint}</p>
+            </button>
+          </QuietActionRow>
+          <QuietActionRow>
+            <button
+              type="button"
+              onClick={() => {
+                setRestoreSourceDialogOpen(false);
+                void openRemoteRestoreList();
+              }}
+              disabled={busy}
+              className="block w-full border-0 bg-transparent p-0 text-left disabled:opacity-50"
+            >
+              <p className="text-sm font-semibold text-[var(--qp-text-primary)]">{UI_TEXT.settings.restoreSourceRemoteTitle}</p>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--qp-text-tertiary)]">{UI_TEXT.settings.restoreSourceRemoteHint}</p>
+            </button>
+          </QuietActionRow>
+        </div>
+      </QuietDialog>
+
+      <QuietDialog
         open={strategyDialogOpen}
         title={UI_TEXT.settings.restoreStrategyLabel}
         description={UI_TEXT.settings.restoreStrategyHint}
-        onClose={() => setStrategyDialogOpen(false)}
+        onClose={closeStrategyDialog}
         closeOnBackdrop={!isRestoringBackup}
         actions={(
           <>
             <button
               type="button"
-              onClick={() => setStrategyDialogOpen(false)}
+              onClick={closeStrategyDialog}
               disabled={isRestoringBackup}
               className="qp-button-secondary h-8 min-h-0 rounded-[8px] px-3 text-xs font-semibold leading-none disabled:opacity-50"
             >
@@ -160,13 +337,12 @@ export default function SettingsDataSafetyPanel({
             <button
               type="button"
               onClick={() => {
-                setStrategyDialogOpen(false);
-                onRestoreBackup();
+                confirmRestoreStrategy();
               }}
-              disabled={isExportingBackup || isRestoringBackup}
+              disabled={busy}
               className="qp-button-primary h-8 min-h-0 rounded-[8px] px-3 text-xs font-semibold leading-none disabled:opacity-50"
             >
-              {isRestoringBackup ? UI_TEXT.settings.backupRestoring : UI_TEXT.settings.backupRestoreAction}
+              {isRestoringBackup || remoteBackup.isListing ? UI_TEXT.settings.backupRestoring : UI_TEXT.settings.backupRestoreAction}
             </button>
           </>
         )}

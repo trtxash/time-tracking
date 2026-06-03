@@ -58,7 +58,7 @@ type PrepareBackupRestoreDeps = {
 const RELEASE_NOTES_URL = "https://github.com/Ceceliaee/time-tracking/releases";
 const FEEDBACK_URL = "https://github.com/Ceceliaee/time-tracking/issues/new/choose";
 
-function buildBackupPreviewSummary(preview: BackupPreview): string {
+export function buildBackupPreviewSummary(preview: BackupPreview): string {
   const exportedAt = new Date(preview.exportedAtMs).toLocaleString(getUiLocale());
   return [
     `${UI_TEXT.backup.versionLabel(preview.version)}（${UI_TEXT.backup.schemaLabel(preview.schemaVersion)}）`,

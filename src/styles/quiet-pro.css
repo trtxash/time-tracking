@@ -317,6 +317,50 @@
   color: var(--qp-text-primary);
 }
 
+.settings-webdav-password-masked {
+  -webkit-text-security: disc;
+}
+
+.settings-webdav-server-input {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: var(--qp-radius-control);
+  border: 1px solid var(--qp-border-subtle);
+  background: var(--qp-bg-panel);
+  color: var(--qp-text-primary);
+  transition:
+    border-color var(--qp-motion-fast) var(--qp-motion-ease),
+    background-color var(--qp-motion-fast) var(--qp-motion-ease);
+}
+
+.settings-webdav-server-input:focus-within {
+  border-color: color-mix(in srgb, var(--qp-accent-default) 36%, var(--qp-border-subtle));
+  background: var(--qp-bg-elevated);
+}
+
+.settings-webdav-server-input input {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--qp-text-primary);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+}
+
+.settings-webdav-server-input span {
+  flex: 0 0 auto;
+  padding: 0 10px 0 8px;
+  border-left: 1px solid var(--qp-border-subtle);
+  color: var(--qp-text-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .qp-button-danger {
   border-radius: var(--qp-radius-control);
   border: 1px solid color-mix(in srgb, var(--qp-danger) 75%, black);

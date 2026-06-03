@@ -17,6 +17,9 @@ import {
   normalizeSettingsRecord,
 } from "../src/platform/persistence/appSettingsStore.ts";
 import {
+  remoteBackupSettingsInternals,
+} from "../src/platform/persistence/remoteBackupSettingsStore.ts";
+import {
   buildLocalApiEnabledChange,
   createLocalApiToken,
 } from "../src/features/settings/services/localApiTokenService.ts";
@@ -380,6 +383,16 @@ await runTest("normalizeSettingsRecord accepts current minimize behavior values"
     minimize_behavior: "floating-sidebar",
   });
   assert.equal(fallbackSettings.minimizeBehavior, "widget");
+});
+
+await runTest("remote backup settings normalize WebDAV directory and timestamps", () => {
+  assert.equal(remoteBackupSettingsInternals.normalizeRemoteDir(""), "/TimeTracker");
+  assert.equal(remoteBackupSettingsInternals.normalizeRemoteDir("TimeTracker/backups/"), "/TimeTracker/backups");
+  assert.equal(remoteBackupSettingsInternals.normalizeRemoteDir("/Custom/backups"), "/Custom/backups");
+  assert.equal(remoteBackupSettingsInternals.parseTimestamp(undefined), null);
+  assert.equal(remoteBackupSettingsInternals.parseTimestamp(""), null);
+  assert.equal(remoteBackupSettingsInternals.parseTimestamp("0"), null);
+  assert.equal(remoteBackupSettingsInternals.parseTimestamp("1780493400000"), 1780493400000);
 });
 
 await runTest("normalizeSettingsRecord accepts theme modes and falls back to light", () => {

@@ -44,7 +44,10 @@ export default function Settings({
     isRestoringBackup,
     handleCleanup,
     handleExportBackup,
+    handlePrepareRestoreBackup,
     handleRestoreBackup,
+    clearPendingRestoreBackup,
+    remoteBackup,
     idleTimeoutMinutes,
     timelineMergeGapMinutes,
     minSessionMinutes,
@@ -224,7 +227,10 @@ export default function Settings({
             onRestoreStrategyChange={setRestoreStrategy}
             onCleanup={handleCleanup}
             onExportBackup={() => void handleExportBackup()}
-            onRestoreBackup={() => void handleRestoreBackup()}
+            onPrepareRestoreBackup={handlePrepareRestoreBackup}
+            onRestoreBackup={handleRestoreBackup}
+            onClearPendingRestoreBackup={clearPendingRestoreBackup}
+            remoteBackup={remoteBackup}
           />
         </div>
       </div>

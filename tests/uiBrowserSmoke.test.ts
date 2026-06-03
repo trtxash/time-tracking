@@ -664,6 +664,62 @@ try {
     await waitForExpression(client!, sessionId, "!document.querySelector('.settings-color-scheme-list')");
   });
 
+  await runTest("settings remote backup panel opens WebDAV config dialog without narrow overflow", async () => {
+    assert.equal(
+      await evaluate(client!, sessionId, `
+        (() => {
+          const node = document.querySelector('[aria-label=' + ${jsonString(JSON.stringify("设置"))} + ']');
+          if (!node) return false;
+          node.click();
+          return true;
+        })()
+      `),
+      true,
+    );
+    await waitForExpression(client!, sessionId, `document.body.innerText.includes(${jsonString("远程备份")})`);
+    assert.equal(
+      await evaluate(client!, sessionId, `
+        (() => {
+          const trigger = Array.from(document.querySelectorAll("button"))
+            .find((node) => node.textContent?.trim() === "配置");
+          if (!trigger) return false;
+          trigger.click();
+          return true;
+        })()
+      `),
+      true,
+    );
+    await waitForExpression(client!, sessionId, `document.body.innerText.includes(${jsonString("WebDAV 配置")})`);
+    assert.equal(
+      await evaluate(client!, sessionId, `document.body.innerText.includes(${jsonString("服务器地址")})`),
+      true,
+    );
+
+    await client!.command("Emulation.setDeviceMetricsOverride", {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true,
+    }, sessionId);
+    await delay(100);
+    assert.equal(
+      await evaluate(client!, sessionId, "document.documentElement.scrollWidth <= window.innerWidth + 1"),
+      true,
+      "Settings remote backup dialog overflowed at 390px",
+    );
+
+    await client!.command("Emulation.setDeviceMetricsOverride", {
+      width: 1280,
+      height: 820,
+      deviceScaleFactor: 1,
+      mobile: false,
+    }, sessionId);
+    await evaluate(client!, sessionId, `
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    `);
+    await waitForExpression(client!, sessionId, "!document.querySelector('[role=\"dialog\"]')");
+  });
+
   await runTest("app mapping only offers explicit manual categories", async () => {
     assert.equal(
       await evaluate(client!, sessionId, `

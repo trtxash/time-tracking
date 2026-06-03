@@ -51,6 +51,28 @@ type BackupRestoreFlowOptions = {
   reportError?: ErrorReporter;
 };
 
+type BackupRestorePrepareFlowOptions = {
+  initialPath?: string;
+  prepareBackupRestore: (initialPath?: string) => Promise<BackupRestorePreparation | null>;
+  setRestorePath: (path: string) => void;
+  notify: NotifyAction;
+  onExecutionStart?: BusyHook;
+  onExecutionEnd?: BusyHook;
+  reportError?: ErrorReporter;
+};
+
+type BackupRestoreCommitFlowOptions = {
+  preparation: BackupRestorePreparation;
+  restoreStrategy: BackupRestoreStrategy;
+  confirm: ConfirmAction;
+  restoreBackup: (path: string, restoreStrategy: BackupRestoreStrategy) => Promise<void>;
+  notify: NotifyAction;
+  reload: () => void;
+  onExecutionStart?: BusyHook;
+  onExecutionEnd?: BusyHook;
+  reportError?: ErrorReporter;
+};
+
 function normalizeOptionalPath(path: string | undefined): string | undefined {
   const trimmed = path?.trim();
   return trimmed ? trimmed : undefined;
@@ -103,33 +125,55 @@ export async function runBackupExportFlow(options: BackupExportFlowOptions): Pro
 }
 
 export async function runBackupRestoreFlow(options: BackupRestoreFlowOptions): Promise<boolean> {
-  let preparation: BackupRestorePreparation | null = null;
+  const preparation = await prepareBackupRestoreFlow({
+    initialPath: options.initialPath,
+    prepareBackupRestore: options.prepareBackupRestore,
+    setRestorePath: options.setRestorePath,
+    notify: options.notify,
+    reportError: options.reportError,
+  });
+  if (!preparation) {
+    return false;
+  }
+
+  return commitPreparedBackupRestoreFlow({
+    ...options,
+    preparation,
+  });
+}
+
+export async function prepareBackupRestoreFlow(
+  options: BackupRestorePrepareFlowOptions,
+): Promise<BackupRestorePreparation | null> {
+  options.onExecutionStart?.();
   try {
-    preparation = await options.prepareBackupRestore(normalizeOptionalPath(options.initialPath));
+    const preparation = await options.prepareBackupRestore(normalizeOptionalPath(options.initialPath));
     if (!preparation) {
-      return false;
+      return null;
     }
 
     options.setRestorePath(preparation.path);
     if (!preparation.compatible) {
       options.notify(UI_TEXT.toast.backupIncompatible(preparation.incompatibilityMessage), "warning");
-      return false;
+      return null;
     }
+
+    return preparation;
   } catch (error) {
     options.reportError?.("prepare backup restore failed", error);
     options.notify(UI_TEXT.toast.backupPreviewFailed, "warning");
-    return false;
+    return null;
+  } finally {
+    options.onExecutionEnd?.();
   }
+}
 
-  if (!preparation || !preparation.compatible) {
-    return false;
-  }
-
+export async function commitPreparedBackupRestoreFlow(options: BackupRestoreCommitFlowOptions): Promise<boolean> {
   const confirmed = await options.confirm({
     title: UI_TEXT.settings.restoreConfirmTitle,
     description: UI_TEXT.settings.restoreConfirmDetail(
-      preparation.path,
-      preparation.previewSummary,
+      options.preparation.path,
+      options.preparation.previewSummary,
       UI_TEXT.settings.restoreStrategyOptions[options.restoreStrategy],
     ),
     confirmLabel: UI_TEXT.dialog.confirmDanger,
@@ -141,7 +185,7 @@ export async function runBackupRestoreFlow(options: BackupRestoreFlowOptions): P
 
   options.onExecutionStart?.();
   try {
-    await options.restoreBackup(preparation.path, options.restoreStrategy);
+    await options.restoreBackup(options.preparation.path, options.restoreStrategy);
     options.notify(UI_TEXT.toast.backupRestoreSuccess, "success");
     options.reload();
     return true;

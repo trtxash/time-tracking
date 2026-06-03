@@ -71,12 +71,12 @@ fn default_backup_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String
 }
 
 fn backup_file_name() -> String {
-    let date = chrono::Local::now().format("%Y%m%d").to_string();
-    backup_file_name_for_date(&date)
+    let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
+    backup_file_name_for_timestamp(&timestamp)
 }
 
-fn backup_file_name_for_date(date: &str) -> String {
-    format!("TimeTracker-backup-{date}.{BACKUP_FILE_EXT}")
+fn backup_file_name_for_timestamp(timestamp: &str) -> String {
+    format!("TimeTracker-backup-{timestamp}.{BACKUP_FILE_EXT}")
 }
 
 fn resolve_backup_path<R: Runtime>(
@@ -575,10 +575,10 @@ mod tests {
     use sqlx::{Executor, SqlitePool};
 
     #[test]
-    fn backup_file_name_uses_requested_zip_format() {
+    fn backup_file_name_uses_timestamp_zip_format() {
         assert_eq!(
-            backup_file_name_for_date("20260515"),
-            "TimeTracker-backup-20260515.zip"
+            backup_file_name_for_timestamp("20260515-213045"),
+            "TimeTracker-backup-20260515-213045.zip"
         );
     }
 

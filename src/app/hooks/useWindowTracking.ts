@@ -21,6 +21,7 @@ import {
   loadCurrentAppSettings,
   subscribeAppSettingsChanged,
 } from "../services/appSettingsRuntimeService.ts";
+import { clearDataBootstrapCache } from "../../features/data/services/dataCacheLifecycle.ts";
 import { startTrackerHealthPolling } from "../services/trackerHealthPollingService";
 import { applyTrackingDataChangedPayload } from "./trackingDataChangedRuntime";
 import { useDesktopLaunchBehaviorSync } from "./useDesktopLaunchBehaviorSync";
@@ -88,6 +89,9 @@ export function useWindowTracking(options: UseWindowTrackingOptions = {}) {
       const trackingDataUnlisten = await subscribeTrackingDataChanged(
         async (payload) => {
           if (cancelled) return;
+          if (payload.reason === "backup-restored") {
+            void clearDataBootstrapCache();
+          }
           await applyTrackingDataChangedPayload(payload, {
             loadLatestTrackingPauseSetting,
             loadCurrentTrackingSnapshot,

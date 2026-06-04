@@ -154,11 +154,13 @@ Historical execution plans and stage-specific documents are usually archived und
 
 ## Support
 
-Time Tracker is a personal, local-first open-source project. If it has been useful in your daily work, you can support ongoing maintenance in whichever way is convenient:
+Time Tracker is a personal, local-first open-source project. If it has been useful in your daily life or work, you can support ongoing maintenance in whichever way is convenient:
 
-[<img src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" height="36" alt="Buy me a coffee">](https://ko-fi.com/ceceliaee)
-
-<img src=".github/assets/support/wechat-reward.png" width="200" alt="WeChat reward code">
+<div align="center">
+  <a href="https://ko-fi.com/ceceliaee"><img src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" height="36" alt="Buy me a coffee"></a>
+  <br><br>
+  <img src=".github/assets/support/wechat-reward.png" width="200" alt="WeChat reward code">
+</div>
 
 Sponsorship helps sustain maintenance, but it does not affect feature priority, issue handling, the roadmap, or the product direction.
 

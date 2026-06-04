@@ -2,6 +2,7 @@ import { type CSSProperties, type MouseEvent, useEffect, useMemo, useRef, useSta
 import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, Clock3, Search } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import { UI_TEXT } from "../../../shared/copy/uiText.ts";
+import type { AppLanguage } from "../../../shared/settings/appSettings.ts";
 import {
   buildDataAppTrendViewModel,
   buildDataTrendViewModel,
@@ -11,10 +12,18 @@ import {
   getCachedEarliestSessionStartTime,
   type DataAppOption,
   type DataAppTrendViewModel,
+  type DataTrendViewModel,
   type AggregateSessionRecord,
   type HeatmapSelection,
   loadDataHeatmapSnapshot,
 } from "../services/dataReadModel.ts";
+import {
+  getCachedDataBootstrapSnapshot,
+  loadPersistedDataBootstrapSnapshot,
+  saveDataBootstrapSnapshot,
+  type DataBootstrapSnapshot,
+} from "../services/dataBootstrapSnapshot.ts";
+import { prewarmDataFirstScreen } from "../services/dataFirstScreenPrewarm.ts";
 import QuietChartTooltip from "../../../shared/components/QuietChartTooltip";
 import QuietPageHeader from "../../../shared/components/QuietPageHeader";
 import QuietTooltip from "../../../shared/components/QuietTooltip";
@@ -36,6 +45,7 @@ interface Props {
   loadDataTrendSnapshot: (selection: DataTrendRangeSelection, nowMs?: number) => Promise<DataTrendSnapshot>;
   mappingVersion?: number;
   onOpenHistoryDate?: (dateKey: string) => void;
+  uiLanguage: AppLanguage;
 }
 
 function getAppInitial(appName: string) {
@@ -76,6 +86,7 @@ export default function Data({
   loadDataTrendSnapshot,
   mappingVersion = 0,
   onOpenHistoryDate,
+  uiLanguage,
 }: Props) {
   const today = new Date();
   const currentYear = today.getFullYear();
@@ -84,6 +95,9 @@ export default function Data({
   const [selectedAppKey, setSelectedAppKey] = useState<string | null>(null);
   const [appSearchQuery, setAppSearchQuery] = useState("");
   const initialCachedHeatmapSessions = getCachedDataHeatmapSessions("recent", Date.now());
+  const [bootstrapSnapshot, setBootstrapSnapshot] = useState<DataBootstrapSnapshot | null>(
+    () => getCachedDataBootstrapSnapshot(),
+  );
   const overviewTrend = useDataTrendSnapshot({
     selection: selectedTrendRange,
     refreshKey,
@@ -106,13 +120,44 @@ export default function Data({
   );
   const [heatmapLoading, setHeatmapLoading] = useState(!initialCachedHeatmapSessions);
   const nowMs = overviewTrend.nowMs;
+  const lastTrendViewModelRef = useRef<{
+    rangeCacheKey: string;
+    viewModel: DataTrendViewModel;
+  } | null>(null);
   const lastAppTrendViewModelRef = useRef<{
-    refreshKey: number;
+    rangeCacheKey: string;
     viewModel: DataAppTrendViewModel;
+  } | null>(null);
+  const lastHeatmapRowsRef = useRef<{
+    selection: HeatmapSelection;
+    rows: ReturnType<typeof buildActivityHeatmap>;
   } | null>(null);
   const hasFetchedHeatmapOnceRef = useRef(Boolean(initialCachedHeatmapSessions));
   const activeTrendDateRef = useRef<string | null>(null);
   const activeAppTrendDateRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (bootstrapSnapshot) return;
+
+    let cancelled = false;
+    void loadPersistedDataBootstrapSnapshot().then((snapshot) => {
+      if (!cancelled) {
+        setBootstrapSnapshot(snapshot);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bootstrapSnapshot]);
+
+  useEffect(() => {
+    void prewarmDataFirstScreen({
+      mappingVersion,
+      reason: "data-opened",
+      uiLanguage,
+    });
+  }, [mappingVersion, uiLanguage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,17 +206,43 @@ export default function Data({
     if (!overviewTrend.snapshot) return null;
     return buildDataTrendViewModel(overviewTrend.snapshot.sessions, overviewTrend.snapshot.range, overviewTrend.nowMs);
   }, [mappingVersion, overviewTrend.nowMs, overviewTrend.snapshot]);
+  if (trendViewModel) {
+    lastTrendViewModelRef.current = {
+      rangeCacheKey: overviewTrend.resolvedRange.cacheKey,
+      viewModel: trendViewModel,
+    };
+  }
+  const matchingBootstrapSnapshot = bootstrapSnapshot
+    && bootstrapSnapshot.mappingVersion === mappingVersion
+    && bootstrapSnapshot.uiLanguage === uiLanguage
+    ? bootstrapSnapshot
+    : null;
+  const bootstrapTrendViewModel = matchingBootstrapSnapshot?.overviewRangeCacheKey === overviewTrend.resolvedRange.cacheKey
+    ? matchingBootstrapSnapshot.overviewTrendViewModel
+    : null;
+  const visibleTrendViewModel = trendViewModel
+    ?? (lastTrendViewModelRef.current?.rangeCacheKey === overviewTrend.resolvedRange.cacheKey
+      ? lastTrendViewModelRef.current.viewModel
+      : null)
+    ?? bootstrapTrendViewModel;
   const appTrendViewModel = useMemo(() => {
     if (!appTrend.snapshot) return null;
     return buildDataAppTrendViewModel(appTrend.snapshot.sessions, appTrend.snapshot.range, appTrend.nowMs, selectedAppKey);
   }, [appTrend.nowMs, appTrend.snapshot, mappingVersion, selectedAppKey]);
+  const bootstrapAppTrendViewModel = matchingBootstrapSnapshot?.appRangeCacheKey === appTrend.resolvedRange.cacheKey
+    ? matchingBootstrapSnapshot.appTrendViewModel
+    : null;
   if (appTrendViewModel) {
-    lastAppTrendViewModelRef.current = { refreshKey, viewModel: appTrendViewModel };
+    lastAppTrendViewModelRef.current = {
+      rangeCacheKey: appTrend.resolvedRange.cacheKey,
+      viewModel: appTrendViewModel,
+    };
   }
   const visibleAppTrendViewModel = appTrendViewModel
-    ?? (lastAppTrendViewModelRef.current?.refreshKey === refreshKey
+    ?? (lastAppTrendViewModelRef.current?.rangeCacheKey === appTrend.resolvedRange.cacheKey
       ? lastAppTrendViewModelRef.current.viewModel
-      : null);
+      : null)
+    ?? bootstrapAppTrendViewModel;
   const selectedAppTrendApp = visibleAppTrendViewModel?.selectedApp;
 
   useEffect(() => {
@@ -196,12 +267,27 @@ export default function Data({
   const heatmapRows = useMemo(() => (
     buildActivityHeatmap(yearSessions, selectedHeatmapView, nowMs)
   ), [nowMs, selectedHeatmapView, yearSessions]);
+  const hasHeatmapRowsForSelectedView = yearSessionsView === selectedHeatmapView;
+  if (!heatmapLoading && hasHeatmapRowsForSelectedView) {
+    lastHeatmapRowsRef.current = {
+      selection: selectedHeatmapView,
+      rows: heatmapRows,
+    };
+  }
+  const bootstrapHeatmapRows = matchingBootstrapSnapshot?.heatmapSelection === selectedHeatmapView
+    ? matchingBootstrapSnapshot.heatmapRows
+    : null;
   const heatmapPlaceholderRows = useMemo(() => (
     buildActivityHeatmap([], selectedHeatmapView, nowMs)
   ), [nowMs, selectedHeatmapView]);
-  const hasHeatmapRowsForSelectedView = yearSessionsView === selectedHeatmapView;
-  const shouldShowHeatmapSkeleton = heatmapLoading || !hasHeatmapRowsForSelectedView;
-  const visibleHeatmapRows = shouldShowHeatmapSkeleton ? heatmapPlaceholderRows : heatmapRows;
+  const canUseBootstrapHeatmap = Boolean(bootstrapHeatmapRows && (heatmapLoading || !hasHeatmapRowsForSelectedView));
+  const visibleHeatmapRows = !heatmapLoading && hasHeatmapRowsForSelectedView
+    ? heatmapRows
+    : lastHeatmapRowsRef.current?.selection === selectedHeatmapView
+      ? lastHeatmapRowsRef.current.rows
+      : canUseBootstrapHeatmap
+    ? bootstrapHeatmapRows!
+        : heatmapPlaceholderRows;
   const selectedHeatmapViewKey = String(selectedHeatmapView);
   const yearOptions = useMemo(
     () => buildYearOptions(earliestStartTime, currentYear),
@@ -226,11 +312,11 @@ export default function Data({
   const selectedHeatmapViewLabel = selectedHeatmapView === "recent"
     ? UI_TEXT.data.recentYear
     : String(selectedHeatmapView);
-  const canOpenTrendHistory = trendViewModel?.granularity === "day" && Boolean(onOpenHistoryDate);
+  const canOpenTrendHistory = visibleTrendViewModel?.granularity === "day" && Boolean(onOpenHistoryDate);
   const canOpenAppTrendHistory = visibleAppTrendViewModel?.granularity === "day" && Boolean(onOpenHistoryDate);
   const handleTrendMouseMove = (event: unknown) => {
-    activeTrendDateRef.current = canOpenTrendHistory && trendViewModel
-      ? resolveTrendDateFromChartEvent(event, trendViewModel.chartData)
+    activeTrendDateRef.current = canOpenTrendHistory && visibleTrendViewModel
+      ? resolveTrendDateFromChartEvent(event, visibleTrendViewModel.chartData)
       : null;
   };
   const handleTrendDoubleClick = () => {
@@ -272,6 +358,40 @@ export default function Data({
     handleAppTrendDoubleClick();
   };
 
+  useEffect(() => {
+    if (!trendViewModel || !appTrendViewModel) return;
+    if (heatmapLoading || yearSessionsView !== selectedHeatmapView) return;
+    if (!overviewTrend.snapshot || !appTrend.snapshot) return;
+
+    const snapshot: DataBootstrapSnapshot = {
+      createdAtMs: Date.now(),
+      overviewRangeCacheKey: overviewTrend.snapshot.range.cacheKey,
+      appRangeCacheKey: appTrend.snapshot.range.cacheKey,
+      heatmapSelection: selectedHeatmapView,
+      mappingVersion,
+      uiLanguage,
+      overviewTrendViewModel: trendViewModel,
+      appTrendViewModel,
+      heatmapRows,
+      earliestStartTime,
+    };
+
+    setBootstrapSnapshot(snapshot);
+    void saveDataBootstrapSnapshot(snapshot);
+  }, [
+    appTrend.snapshot,
+    appTrendViewModel,
+    earliestStartTime,
+    heatmapLoading,
+    heatmapRows,
+    mappingVersion,
+    overviewTrend.snapshot,
+    selectedHeatmapView,
+    trendViewModel,
+    uiLanguage,
+    yearSessionsView,
+  ]);
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 md:gap-5 overflow-y-auto pr-1 custom-scrollbar">
       <QuietPageHeader
@@ -290,13 +410,13 @@ export default function Data({
             <div className="data-trend-inline-metrics" aria-label={UI_TEXT.accessibility.data.trendSummary}>
               <div className="data-trend-inline-metric">
                 <Clock3 size={13} aria-hidden />
-                <span>{trendViewModel?.metricLabels.total ?? UI_TEXT.data.weeklyTotal}</span>
-                <strong>{trendViewModel ? formatDuration(trendViewModel.totalDuration) : "-"}</strong>
+                <span>{visibleTrendViewModel?.metricLabels.total ?? UI_TEXT.data.weeklyTotal}</span>
+                <strong>{visibleTrendViewModel ? formatDuration(visibleTrendViewModel.totalDuration) : "-"}</strong>
               </div>
               <div className="data-trend-inline-metric">
                 <CalendarDays size={13} aria-hidden />
-                <span>{trendViewModel?.metricLabels.average ?? UI_TEXT.data.dailyAverage}</span>
-                <strong>{trendViewModel ? formatDuration(trendViewModel.averageDuration) : "-"}</strong>
+                <span>{visibleTrendViewModel?.metricLabels.average ?? UI_TEXT.data.dailyAverage}</span>
+                <strong>{visibleTrendViewModel ? formatDuration(visibleTrendViewModel.averageDuration) : "-"}</strong>
               </div>
             </div>
             <DataTrendRangeControl
@@ -306,13 +426,11 @@ export default function Data({
             />
           </div>
           <div className="pt-4">
-            {(overviewTrend.loading && !overviewTrend.hasFetchedOnce) || !trendViewModel ? (
+            {!visibleTrendViewModel ? (
               <div
                 className="data-trend-chart data-chart-placeholder flex items-center justify-center text-[var(--qp-text-tertiary)] text-xs"
-                aria-busy="true"
-              >
-                {UI_TEXT.history.loading}
-              </div>
+                aria-hidden="true"
+              />
             ) : (
               <div
                 className={`data-trend-chart ${canOpenTrendHistory ? "data-chart-openable" : ""}`}
@@ -327,7 +445,7 @@ export default function Data({
                   initialDimension={{ width: 760, height: 168 }}
                 >
                 <AreaChart
-                  data={trendViewModel.chartData}
+                    data={visibleTrendViewModel.chartData}
                   margin={{ top: 8, right: 22, left: -18, bottom: 0 }}
                   onMouseMove={handleTrendMouseMove}
                   onMouseLeave={() => {
@@ -348,8 +466,8 @@ export default function Data({
                     axisLine={false}
                     tickLine={false}
                     interval={0}
-                    ticks={trendViewModel.chartAxis.ticks}
-                    domain={[0, trendViewModel.chartAxis.domainMax]}
+                    ticks={visibleTrendViewModel.chartAxis.ticks}
+                    domain={[0, visibleTrendViewModel.chartAxis.domainMax]}
                     tickFormatter={(value) => formatChartHours(Number(value))}
                   />
                   <QuietChartTooltip
@@ -424,17 +542,9 @@ export default function Data({
           </div>
 
           <div
-            className={`data-heatmap data-heatmap-calendar mt-5 ${heatmapLoading ? "data-heatmap-loading-state" : ""}`}
-            aria-busy={heatmapLoading}
+            className="data-heatmap data-heatmap-calendar mt-5"
           >
               <div className="data-heatmap-content">
-                {shouldShowHeatmapSkeleton ? (
-                  <div
-                    className="data-heatmap-skeleton"
-                    aria-hidden
-                    style={{ "--data-heatmap-week-count": visibleHeatmapRows.length } as CSSProperties}
-                  />
-                ) : (
                   <div
                     className="data-heatmap-scroll"
                     style={{ "--data-heatmap-week-count": visibleHeatmapRows.length } as CSSProperties}
@@ -489,7 +599,6 @@ export default function Data({
                       </div>
                     </div>
                   </div>
-                )}
               </div>
             </div>
         </div>
@@ -526,10 +635,8 @@ export default function Data({
           </div>
         </div>
 
-        {(appTrend.loading && !appTrend.hasFetchedOnce) || !visibleAppTrendViewModel ? (
-          <div className="data-app-loading text-[var(--qp-text-tertiary)] text-xs">
-            {UI_TEXT.history.loading}
-          </div>
+        {!visibleAppTrendViewModel ? (
+          <div className="data-app-loading text-[var(--qp-text-tertiary)] text-xs" aria-hidden="true" />
         ) : visibleAppTrendViewModel.appOptions.length === 0 ? (
           <div className="data-app-loading text-[var(--qp-text-tertiary)] text-xs">
             {UI_TEXT.data.appTrendEmpty}

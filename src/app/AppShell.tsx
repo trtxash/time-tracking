@@ -4,7 +4,6 @@ import AppSidebar from "./components/AppSidebar";
 import AppTitleBar from "./components/AppTitleBar";
 import type { View } from "./types/view";
 import Dashboard from "../features/dashboard/components/Dashboard";
-import { watchCurrentWindowMaximized } from "../platform/desktop/windowControlGateway";
 import QuietToastStack from "../shared/components/QuietToastStack";
 import type {
   AppLanguage,
@@ -30,8 +29,11 @@ import {
   scheduleStartupWarmupRefresh,
   startStartupWarmup,
 } from "./services/startupWarmupService";
-import { clearDataReadModelCache } from "../features/data/services/dataReadModel.ts";
-import { clearDataTrendSnapshotCache } from "../features/data/services/dataTrendSnapshot.ts";
+import {
+  clearDataBootstrapCache,
+  clearDataHeavyCaches,
+} from "../features/data/services/dataCacheLifecycle.ts";
+import { prewarmDataFirstScreen } from "../features/data/services/dataFirstScreenPrewarm.ts";
 import { clearHistorySnapshotCache } from "../features/history/services/historySnapshotCache.ts";
 import { AppClassification } from "../shared/classification/appClassification.ts";
 import { useQuietDialogs } from "../shared/hooks/useQuietDialogs";
@@ -47,6 +49,10 @@ import {
 import {
   createPreloadableViewComponent,
 } from "./services/viewChunkPreloadService";
+import { watchCurrentWindowForegroundState, watchCurrentWindowMaximized } from "../platform/desktop/windowControlGateway";
+
+const DATA_FOREGROUND_PREWARM_DELAY_MS = 1_200;
+const DATA_BACKGROUND_CACHE_RELEASE_DELAY_MS = 10 * 60 * 1000;
 
 const History = createPreloadableViewComponent("history");
 const Data = createPreloadableViewComponent("data");
@@ -108,6 +114,10 @@ function AppShellContent() {
   const [settingsThemeModePreview, setSettingsThemeModePreview] = useState<ThemeMode | null>(null);
   const [settingsColorSchemePreview, setSettingsColorSchemePreview] = useState<ColorSchemePreview | null>(null);
   const [settingsLanguagePreview, setSettingsLanguagePreview] = useState<AppLanguage | null>(null);
+  const [isDocumentVisible, setIsDocumentVisible] = useState(() => (
+    typeof document === "undefined" ? true : document.visibilityState !== "hidden"
+  ));
+  const [isWindowForegroundLike, setIsWindowForegroundLike] = useState(true);
   const [historyDateRequest, setHistoryDateRequest] = useState<HistoryDateRequest | null>(null);
   const warmupRuntimeReadyResolveRef = useRef<(() => void) | null>(null);
   const warmupRuntimeReadyPromiseRef = useRef<Promise<void> | null>(null);
@@ -179,8 +189,24 @@ function AppShellContent() {
   useEffect(() => {
     if (!classificationReady || syncTick <= 0) return undefined;
 
-    return scheduleStartupWarmupRefresh();
-  }, [classificationReady, syncTick]);
+    return scheduleStartupWarmupRefresh(undefined, {
+      includeData: currentView === "data" && isDocumentVisible && isWindowForegroundLike,
+    });
+  }, [classificationReady, currentView, isDocumentVisible, isWindowForegroundLike, syncTick]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+
+    const syncDocumentVisibility = () => {
+      setIsDocumentVisible(document.visibilityState !== "hidden");
+    };
+
+    syncDocumentVisibility();
+    document.addEventListener("visibilitychange", syncDocumentVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", syncDocumentVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -210,6 +236,71 @@ function AppShellContent() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+
+    void watchCurrentWindowForegroundState((state) => {
+      if (!disposed) {
+        setIsWindowForegroundLike(state.foregroundLike);
+      }
+    })
+      .then((nextUnlisten) => {
+        if (disposed) {
+          nextUnlisten();
+          return;
+        }
+
+        unlisten = nextUnlisten;
+      })
+      .catch((error) => {
+        console.warn("watch current window foreground state failed", error);
+      });
+
+    return () => {
+      disposed = true;
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!classificationReady || !isDocumentVisible || !isWindowForegroundLike) return undefined;
+
+    const timer = window.setTimeout(() => {
+      if (!classificationReady || !isDocumentVisible || !isWindowForegroundLike) return;
+
+      void prewarmDataFirstScreen({
+        mappingVersion,
+        reason: "foreground-opened",
+        uiLanguage: uiTextLanguage,
+      });
+    }, DATA_FOREGROUND_PREWARM_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [classificationReady, isDocumentVisible, isWindowForegroundLike, mappingVersion, uiTextLanguage]);
+
+  useEffect(() => {
+    if (isDocumentVisible && isWindowForegroundLike) return undefined;
+
+    const timer = window.setTimeout(() => {
+      if (document.visibilityState !== "hidden" && isWindowForegroundLike) return;
+
+      try {
+        clearDataHeavyCaches();
+      } catch (error) {
+        console.warn("clear Data heavy caches after background delay failed", error);
+      }
+    }, DATA_BACKGROUND_CACHE_RELEASE_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isDocumentVisible, isWindowForegroundLike]);
 
   const handleMinSessionSecsChange = useCallback((nextValue: number) => {
     setAppSettings((current) => ({
@@ -309,12 +400,16 @@ function AppShellContent() {
                   loadDataTrendSnapshot={loadDataTrendRuntimeSnapshot}
                   mappingVersion={mappingVersion}
                   onOpenHistoryDate={openHistoryForDate}
+                  uiLanguage={uiTextLanguage}
                 />
               )}
               {currentView === "settings" && (
                 <Settings
                   key="settings"
                   onSettingsChanged={(nextSettings: AppSettings) => {
+                    if (nextSettings.language !== appSettings.language) {
+                      void clearDataBootstrapCache();
+                    }
                     setAppSettings(nextSettings);
                     setSettingsThemeModePreview(null);
                     setSettingsColorSchemePreview(null);
@@ -346,13 +441,14 @@ function AppShellContent() {
                   onRegisterSaveHandler={registerMappingSaveHandler}
                   onDirtyChange={setMappingDirty}
                   onOverridesChanged={() => {
+                    void clearDataBootstrapCache();
                     setReadModelRefreshState(applyMappingOverridesReadModelRefresh);
                     pushToast(uiText.app.mappingUpdated, "success");
                   }}
                   onSessionsDeleted={() => {
                     clearHistorySnapshotCache();
-                    clearDataReadModelCache();
-                    clearDataTrendSnapshotCache();
+                    clearDataHeavyCaches();
+                    void clearDataBootstrapCache();
                     setReadModelRefreshState(applySessionDeletionReadModelRefresh);
                     pushToast(uiText.app.historyDeleted, "success");
                   }}

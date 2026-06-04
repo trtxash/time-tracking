@@ -18,14 +18,29 @@ export interface DataTrendSnapshotDependencies {
 
 const snapshotCache = new Map<string, DataTrendSnapshot>();
 const sessionPromises = new Map<string, Promise<AggregateSessionRecord[]>>();
+const DATA_TREND_SNAPSHOT_CACHE_LIMIT = 4;
+
+function touchSnapshotCacheEntry(key: string, snapshot: DataTrendSnapshot): void {
+  snapshotCache.delete(key);
+  snapshotCache.set(key, snapshot);
+
+  while (snapshotCache.size > DATA_TREND_SNAPSHOT_CACHE_LIMIT) {
+    const oldestKey = snapshotCache.keys().next().value;
+    if (!oldestKey) break;
+    snapshotCache.delete(oldestKey);
+  }
+}
 
 export function getCachedDataTrendSnapshot(range: ResolvedDataTrendRange): DataTrendSnapshot | null {
   const snapshot = snapshotCache.get(range.cacheKey);
-  return snapshot ? { ...snapshot, range } : null;
+  if (!snapshot) return null;
+
+  touchSnapshotCacheEntry(range.cacheKey, snapshot);
+  return { ...snapshot, range };
 }
 
 export function setDataTrendSnapshotCache(snapshot: DataTrendSnapshot): void {
-  snapshotCache.set(snapshot.range.cacheKey, snapshot);
+  touchSnapshotCacheEntry(snapshot.range.cacheKey, snapshot);
 }
 
 export function clearDataTrendSnapshotCache(): void {
@@ -53,4 +68,8 @@ export async function loadDataTrendSnapshot(
 
 export function prewarmDefaultDataTrendSnapshot(nowMs: number = Date.now()) {
   return loadDataTrendSnapshot({ kind: "rolling", days: 7 }, nowMs);
+}
+
+export function getDataTrendSnapshotCacheSizeForTests(): number {
+  return snapshotCache.size;
 }

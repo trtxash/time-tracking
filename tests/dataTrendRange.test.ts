@@ -8,6 +8,7 @@ import {
 import {
   clearDataTrendSnapshotCache,
   getCachedDataTrendSnapshot,
+  getDataTrendSnapshotCacheSizeForTests,
   loadDataTrendSnapshot,
 } from "../src/features/data/services/dataTrendSnapshot.ts";
 
@@ -94,6 +95,22 @@ await runTest("trend snapshots dedupe matching in-flight range loads and cache t
   assert.equal(first.sessions, second.sessions);
   assert.equal(loadCount, 1);
   assert.equal(getCachedDataTrendSnapshot(first.range)?.sessions, first.sessions);
+});
+
+await runTest("trend snapshot cache keeps a small LRU set", async () => {
+  const deps = {
+    getSessionSummariesInRange: async () => [],
+  };
+
+  for (let day = 1; day <= 5; day += 1) {
+    await loadDataTrendSnapshot({
+      kind: "custom",
+      startDateKey: `2026-05-0${day}`,
+      endDateKey: `2026-05-1${day}`,
+    }, nowMs, deps);
+  }
+
+  assert.equal(getDataTrendSnapshotCacheSizeForTests(), 4);
 });
 
 console.log(`Passed ${passed} data trend range tests`);

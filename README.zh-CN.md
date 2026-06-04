@@ -156,11 +156,13 @@ src-tauri/target/release/bundle/
 
 ## 支持项目
 
-Time Tracker 是一个个人维护的、本地优先开源项目。如果它对你的日常工作有帮助，也欢迎选择方便的方式支持后续维护：
+Time Tracker 是一个个人维护的、本地优先开源项目。如果它对你的日常生活或工作有帮助，也欢迎选择方便的方式支持后续维护：
 
-[<img src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" height="36" alt="Buy me a coffee">](https://ko-fi.com/ceceliaee)
-
-<img src=".github/assets/support/wechat-reward.png" width="200" alt="微信赞赏码">
+<div align="center">
+  <a href="https://ko-fi.com/ceceliaee"><img src="https://storage.ko-fi.com/cdn/kofi2.png?v=3" height="36" alt="Buy me a coffee"></a>
+  <br><br>
+  <img src=".github/assets/support/wechat-reward.png" width="200" alt="微信赞赏码">
+</div>
 
 赞助会帮助项目持续维护，但不会影响功能优先级、问题处理方式、路线图或产品方向。
 

@@ -36,6 +36,34 @@ App note en: TBD.
 
 - 暂无。
 
+## [1.4.1] - 2026-06-04
+
+Release: 改进数据页首屏响应与后台缓存释放。
+App note: 改进数据页打开体验与后台缓存释放。
+App note en: Improved Data page opening and background cache release.
+
+### Added
+
+- 暂无。
+
+### Changed
+
+- Data 页在前台打开时会预热首屏所需的趋势与热力图快照，并复用轻量首屏缓存，让常规进入 Data 页时不再显示可见 loading。
+
+### Fixed
+
+- 限制 Data 页趋势快照与热力图会话缓存规模，并在应用进入后台一段时间后释放 Data 重型缓存，降低长时间运行后的资源增长风险。Refs [#13](https://github.com/Ceceliaee/time-tracking/issues/13)
+- 修复更新状态订阅在组件卸载后才完成注册时可能未及时释放监听的问题。
+
+### Removed
+
+- 暂无。
+
+### Internal
+
+- Data 首屏缓存以字段校验和缓存重建为准，不引入版本化兼容迁移路径。
+- 归档 Data 前台预热与无可见 loading 执行计划。
+
 ## [1.4.0] - 2026-06-04
 
 Release: 新增 WebDAV 远程备份，并改进自动更新备用链路。

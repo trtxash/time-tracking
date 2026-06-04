@@ -6,6 +6,7 @@ import {
   buildDataTrendViewModel,
   buildDataAppTrendViewModel,
   buildYearOptions,
+  getDataHeatmapSessionCacheSizeForTests,
   getCachedDataHeatmapSessions,
   getHeatmapRange,
   loadDataHeatmapSnapshot,
@@ -14,10 +15,30 @@ import {
   type AggregateSessionRecord,
   type DataHeatmapDependencies,
 } from "../src/features/data/services/dataReadModel.ts";
+import { clearDataHeavyCaches } from "../src/features/data/services/dataCacheLifecycle.ts";
+import {
+  prewarmDataFirstScreen,
+  resetDataFirstScreenPrewarmForTests,
+} from "../src/features/data/services/dataFirstScreenPrewarm.ts";
+import {
+  clearDataTrendSnapshotCache,
+  getDataTrendSnapshotCacheSizeForTests,
+  loadDataTrendSnapshot,
+  type DataTrendSnapshot,
+} from "../src/features/data/services/dataTrendSnapshot.ts";
+import {
+  loadPersistedDataBootstrapSnapshot,
+  resetDataBootstrapSnapshotForTests,
+  saveDataBootstrapSnapshot,
+  type DataBootstrapSnapshot,
+} from "../src/features/data/services/dataBootstrapSnapshot.ts";
 
 let passed = 0;
 
 async function runTest(name: string, fn: () => Promise<void> | void) {
+  resetDataBootstrapSnapshotForTests();
+  resetDataFirstScreenPrewarmForTests();
+  clearDataTrendSnapshotCache();
   await fn();
   passed += 1;
   console.log(`PASS ${name}`);
@@ -35,6 +56,34 @@ function makeSession(overrides: Partial<AggregateSessionRecord>): AggregateSessi
 
 function findCell(rows: ReturnType<typeof buildActivityHeatmap>, date: string) {
   return rows.flatMap((week) => week.cells).find((cell) => cell.date === date);
+}
+
+function makeBootstrapSnapshot(overrides: Partial<DataBootstrapSnapshot> = {}): DataBootstrapSnapshot {
+  const nowMs = new Date(2026, 4, 8, 12, 0, 0).getTime();
+  const sessions = [
+    makeSession({
+      startTime: new Date(2026, 4, 8, 9, 0, 0).getTime(),
+      endTime: new Date(2026, 4, 8, 10, 0, 0).getTime(),
+    }),
+  ];
+  const overviewRange = 7;
+  const appRange = 7;
+  const overviewTrendViewModel = buildDataTrendViewModel(sessions, overviewRange, nowMs);
+  const appTrendViewModel = buildDataAppTrendViewModel(sessions, appRange, nowMs, null);
+
+  return {
+    createdAtMs: nowMs,
+    overviewRangeCacheKey: "rolling:7:2026-05-02:2026-05-08",
+    appRangeCacheKey: "rolling:7:2026-05-02:2026-05-08",
+    heatmapSelection: "recent",
+    mappingVersion: 0,
+    uiLanguage: "zh-CN",
+    overviewTrendViewModel,
+    appTrendViewModel,
+    heatmapRows: buildActivityHeatmap(sessions, "recent", nowMs),
+    earliestStartTime: sessions[0].startTime,
+    ...overrides,
+  };
 }
 
 await runTest("activity heatmap splits sessions across local days", () => {
@@ -345,6 +394,196 @@ await runTest("recent heatmap prewarm reuses a warm cache", async () => {
   assert.equal(second.sessions, sessions);
   assert.equal(earliestLoadCount, 1);
   assert.equal(sessionLoadCount, 1);
+});
+
+await runTest("heatmap session cache keeps a small LRU set", async () => {
+  resetDataReadModelCacheForTests();
+  const deps: DataHeatmapDependencies = {
+    getEarliestSessionStartTime: async () => null,
+    getSessionsInRange: async () => [],
+  };
+  const nowMs = new Date(2026, 0, 3, 12, 0, 0).getTime();
+
+  await loadDataHeatmapSnapshot("recent", nowMs, deps);
+  await loadDataHeatmapSnapshot(2025, nowMs, deps);
+  await loadDataHeatmapSnapshot(2026, nowMs, deps);
+
+  assert.equal(getDataHeatmapSessionCacheSizeForTests(), 2);
+  assert.equal(getCachedDataHeatmapSessions("recent", nowMs), undefined);
+});
+
+await runTest("data bootstrap snapshot loads a valid persisted payload into cache", async () => {
+  const snapshot = makeBootstrapSnapshot();
+  const loaded = await loadPersistedDataBootstrapSnapshot({
+    loadPayload: async () => JSON.stringify(snapshot),
+    savePayload: async () => {
+      throw new Error("unexpected save");
+    },
+    clearPayload: async () => {
+      throw new Error("unexpected clear");
+    },
+    warn: () => {
+      throw new Error("unexpected warning");
+    },
+  });
+
+  assert.equal(loaded?.createdAtMs, snapshot.createdAtMs);
+  assert.equal(loaded?.overviewTrendViewModel.totalDuration, snapshot.overviewTrendViewModel.totalDuration);
+});
+
+await runTest("data bootstrap snapshot refuses oversized payloads", async () => {
+  const warnings: string[] = [];
+  let saved = false;
+  const snapshot = makeBootstrapSnapshot({
+    heatmapRows: Array.from({ length: 12_000 }, (_, index) => ({
+      key: `week-${index}`,
+      monthLabel: "5月",
+      cells: [],
+    })),
+  });
+
+  const didSave = await saveDataBootstrapSnapshot(snapshot, { minSaveIntervalMs: 0 }, {
+    loadPayload: async () => null,
+    savePayload: async () => {
+      saved = true;
+    },
+    clearPayload: async () => undefined,
+    warn: (message) => warnings.push(message),
+  });
+
+  assert.equal(didSave, false);
+  assert.equal(saved, false);
+  assert.equal(warnings.length, 1);
+});
+
+await runTest("data first screen prewarm saves a bootstrap snapshot", async () => {
+  const nowMs = new Date(2026, 4, 8, 12, 0, 0).getTime();
+  const sessions = [
+    makeSession({
+      startTime: new Date(2026, 4, 8, 9, 0, 0).getTime(),
+      endTime: new Date(2026, 4, 8, 10, 0, 0).getTime(),
+    }),
+  ];
+  const trendSnapshot = await loadDataTrendSnapshot({ kind: "rolling", days: 7 }, nowMs, {
+    getSessionSummariesInRange: async () => sessions,
+  });
+  let savedSnapshot: DataBootstrapSnapshot | null = null;
+
+  const snapshot = await prewarmDataFirstScreen({
+    mappingVersion: 3,
+    reason: "foreground-opened",
+    uiLanguage: "zh-CN",
+    nowMs,
+  }, {
+    loadTrendSnapshot: async () => trendSnapshot,
+    prewarmRecentHeatmap: async () => ({
+      earliestStartTime: sessions[0].startTime,
+      range: getHeatmapRange("recent", nowMs),
+      cacheKey: "recent:2025-05-05:2026-05-11",
+      sessions,
+    }),
+    saveBootstrapSnapshot: async (nextSnapshot) => {
+      savedSnapshot = nextSnapshot;
+      return true;
+    },
+    warn: () => {
+      throw new Error("unexpected warning");
+    },
+  });
+
+  assert.equal(snapshot?.mappingVersion, 3);
+  assert.equal(savedSnapshot?.overviewTrendViewModel.totalDuration, 60 * 60 * 1000);
+  assert.equal(savedSnapshot?.appTrendViewModel.selectedApp?.appName, "Cursor");
+  assert.ok(savedSnapshot?.heatmapRows.length);
+});
+
+await runTest("data first screen prewarm dedupes pending matching work and throttles repeats", async () => {
+  const nowMs = new Date(2026, 4, 8, 12, 0, 0).getTime();
+  const sessions = [
+    makeSession({
+      startTime: new Date(2026, 4, 8, 9, 0, 0).getTime(),
+      endTime: new Date(2026, 4, 8, 10, 0, 0).getTime(),
+    }),
+  ];
+  const trendSnapshot = await loadDataTrendSnapshot({ kind: "rolling", days: 7 }, nowMs, {
+    getSessionSummariesInRange: async () => sessions,
+  });
+  let loadCount = 0;
+  let releaseLoad: (() => void) | null = null;
+  const deps = {
+    loadTrendSnapshot: async (): Promise<DataTrendSnapshot> => {
+      loadCount += 1;
+      await new Promise<void>((resolve) => {
+        releaseLoad = resolve;
+      });
+      return trendSnapshot;
+    },
+    prewarmRecentHeatmap: async () => ({
+      earliestStartTime: sessions[0].startTime,
+      range: getHeatmapRange("recent", nowMs),
+      cacheKey: "recent:2025-05-05:2026-05-11",
+      sessions,
+    }),
+    saveBootstrapSnapshot: async () => true,
+    warn: () => {
+      throw new Error("unexpected warning");
+    },
+  };
+
+  const first = prewarmDataFirstScreen({
+    mappingVersion: 1,
+    reason: "foreground-opened",
+    uiLanguage: "zh-CN",
+    nowMs,
+  }, deps);
+  const second = prewarmDataFirstScreen({
+    mappingVersion: 1,
+    reason: "data-opened",
+    uiLanguage: "zh-CN",
+    nowMs,
+  }, deps);
+  releaseLoad?.();
+  await Promise.all([first, second]);
+
+  const throttled = await prewarmDataFirstScreen({
+    mappingVersion: 1,
+    reason: "foreground-opened",
+    uiLanguage: "zh-CN",
+    nowMs: nowMs + 1_000,
+  }, deps);
+
+  assert.equal(loadCount, 1);
+  assert.equal(throttled, null);
+});
+
+await runTest("data heavy cache cleanup clears trend and heatmap caches without bootstrap", async () => {
+  resetDataReadModelCacheForTests();
+  const nowMs = new Date(2026, 0, 3, 12, 0, 0).getTime();
+  await loadDataTrendSnapshot({ kind: "rolling", days: 7 }, nowMs, {
+    getSessionSummariesInRange: async () => [],
+  });
+  await loadDataHeatmapSnapshot("recent", nowMs, {
+    getEarliestSessionStartTime: async () => null,
+    getSessionsInRange: async () => [],
+  });
+  await saveDataBootstrapSnapshot(makeBootstrapSnapshot(), { minSaveIntervalMs: 0 }, {
+    clearPayload: async () => undefined,
+    loadPayload: async () => null,
+    savePayload: async () => undefined,
+  });
+
+  assert.equal(getDataTrendSnapshotCacheSizeForTests(), 1);
+  assert.equal(getDataHeatmapSessionCacheSizeForTests(), 1);
+
+  clearDataHeavyCaches();
+
+  assert.equal(getDataTrendSnapshotCacheSizeForTests(), 0);
+  assert.equal(getDataHeatmapSessionCacheSizeForTests(), 0);
+  assert.equal((await loadPersistedDataBootstrapSnapshot({
+    clearPayload: async () => undefined,
+    loadPayload: async () => JSON.stringify(makeBootstrapSnapshot()),
+    savePayload: async () => undefined,
+  }))?.overviewRangeCacheKey, "rolling:7:2026-05-02:2026-05-08");
 });
 
 console.log(`Passed ${passed} data read model tests`);

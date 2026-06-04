@@ -90,6 +90,10 @@ function createWarmupDeps(events: string[], options: {
     loadDataTrendRuntimeSnapshot: async () => {
       events.push("data-trend-refresh");
     },
+    loadPersistedDataBootstrapSnapshot: async () => {
+      events.push("data-bootstrap-snapshot-cache");
+      return null;
+    },
     preloadLazyViewChunk: async (view: PreloadableView) => {
       events.push(`chunk:${view}`);
       maybeFail("view-chunks");
@@ -97,14 +101,6 @@ function createWarmupDeps(events: string[], options: {
     prewarmClassificationBootstrapCache: async () => {
       events.push("mapping-bootstrap");
       maybeFail("mapping-bootstrap");
-    },
-    prewarmRecentDataHeatmapCache: async () => {
-      events.push("data-heatmap");
-      maybeFail("data-recent-heatmap");
-    },
-    prewarmDefaultDataTrendSnapshot: async () => {
-      events.push("data-default-snapshot");
-      maybeFail("data-default-snapshot");
     },
     prewarmSettingsBootstrapCache: async () => {
       events.push("settings-bootstrap");
@@ -147,14 +143,13 @@ await runTest("startup warmup runs default tasks in a stable order", async () =>
     "chunk:data",
     "settings-bootstrap",
     "mapping-bootstrap",
+    "data-bootstrap-snapshot-cache",
     "dashboard-snapshot",
     "history-snapshot",
-    "data-default-snapshot",
-    "data-heatmap",
     "settings-bootstrap",
   ]);
   assert.deepEqual(warnings, []);
-  assert.equal(controller.snapshot().tasks["data-default-snapshot"].status, "fulfilled");
+  assert.equal(controller.snapshot().tasks["history-today-snapshot"].status, "fulfilled");
 });
 
 await runTest("startup warmup keeps later tasks running after a failure", async () => {
@@ -252,8 +247,8 @@ await runTest("startup warmup refresh debounces repeated tracking changes", asyn
     },
   };
 
-  scheduleStartupWarmupRefresh(30, deps);
-  scheduleStartupWarmupRefresh(30, deps);
+  scheduleStartupWarmupRefresh(30, {}, deps);
+  scheduleStartupWarmupRefresh(30, {}, deps);
 
   assert.equal(scheduler.tasks.length, 2);
   const cancelledTask = scheduler.runNext();
@@ -264,10 +259,30 @@ await runTest("startup warmup refresh debounces repeated tracking changes", asyn
   assert.deepEqual(events, [
     "dashboard-snapshot",
     "history-snapshot",
-    "data-trend-refresh",
-    "data-heatmap",
   ]);
   assert.deepEqual(warnings, []);
+});
+
+await runTest("startup warmup refresh includes data only when requested", async () => {
+  const scheduler = createTaskScheduler();
+  const events: string[] = [];
+  const deps = {
+    ...createWarmupDeps(events),
+    scheduler: scheduler.schedule,
+    warn: () => {
+      throw new Error("unexpected warning");
+    },
+  };
+
+  scheduleStartupWarmupRefresh(30, { includeData: true }, deps);
+  scheduler.runNext();
+  await flushPromises();
+
+  assert.deepEqual(events, [
+    "dashboard-snapshot",
+    "history-snapshot",
+    "data-trend-refresh",
+  ]);
 });
 
 console.log(`Passed ${passed} startup warmup tests`);

@@ -119,6 +119,7 @@ export interface DataHeatmapDependencies {
 }
 
 const RECENT_HEATMAP_WEEK_COUNT = 53;
+const HEATMAP_SESSION_CACHE_LIMIT = 2;
 const heatmapSessionCache = new Map<string, AggregateSessionRecord[]>();
 let earliestSessionStartTimeCache: number | null | undefined;
 
@@ -604,8 +605,24 @@ export function getHeatmapSelectionKey(selection: HeatmapSelection, nowMs: numbe
   return `${selection}:${toDateKey(range.start)}:${toDateKey(range.end)}`;
 }
 
+function setHeatmapSessionCache(cacheKey: string, sessions: AggregateSessionRecord[]) {
+  heatmapSessionCache.delete(cacheKey);
+  heatmapSessionCache.set(cacheKey, sessions);
+
+  while (heatmapSessionCache.size > HEATMAP_SESSION_CACHE_LIMIT) {
+    const oldestKey = heatmapSessionCache.keys().next().value;
+    if (!oldestKey) break;
+    heatmapSessionCache.delete(oldestKey);
+  }
+}
+
 export function getCachedDataHeatmapSessions(selection: HeatmapSelection, nowMs: number) {
-  return heatmapSessionCache.get(getHeatmapSelectionKey(selection, nowMs));
+  const cacheKey = getHeatmapSelectionKey(selection, nowMs);
+  const sessions = heatmapSessionCache.get(cacheKey);
+  if (!sessions) return undefined;
+
+  setHeatmapSessionCache(cacheKey, sessions);
+  return sessions;
 }
 
 export function buildYearOptions(earliestStartTime: number | null, currentYear: number) {
@@ -699,7 +716,7 @@ export async function loadDataHeatmapSnapshot(
   ]);
 
   earliestSessionStartTimeCache = earliestStartTime;
-  heatmapSessionCache.set(cacheKey, sessions);
+  setHeatmapSessionCache(cacheKey, sessions);
 
   return {
     earliestStartTime,
@@ -707,6 +724,10 @@ export async function loadDataHeatmapSnapshot(
     range,
     cacheKey,
   };
+}
+
+export function getDataHeatmapSessionCacheSizeForTests(): number {
+  return heatmapSessionCache.size;
 }
 
 export async function prewarmRecentDataHeatmapCache(

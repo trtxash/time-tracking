@@ -10,6 +10,7 @@ const EXPECTED_NAV_LABELS = ["今天", "历史", "数据", "应用", "设置", "
 const DASHBOARD_MARKERS = ["专注分布", "应用排行"] as const;
 const SETTINGS_MARKER = "主题模式";
 const APP_LOADING_VIEW = COPY["zh-CN"].app.loadingView;
+const HISTORY_LOADING_VIEW = COPY["zh-CN"].history.loading;
 const HISTORY_TITLE_DETAIL_COUNT = 10;
 const DEFAULT_TIMEOUT_MS = 15_000;
 
@@ -623,6 +624,39 @@ try {
         `unexpected app loading view after clicking ${label}`,
       );
     }
+  });
+
+  await runTest("Data navigation is immediate and avoids visible loading affordances", async () => {
+    const clicked = await evaluate(client!, sessionId, `
+      (() => {
+        const node = document.querySelector('[aria-label=' + ${jsonString(JSON.stringify("数据"))} + ']');
+        if (!node) return false;
+        node.click();
+        return true;
+      })()
+    `);
+    assert.equal(clicked, true);
+    await delay(50);
+    assert.equal(
+      await evaluate(
+        client!,
+        sessionId,
+        `document.querySelector('[aria-label=' + ${jsonString(JSON.stringify("数据"))} + ']')?.className.includes("qp-nav-item-active")`,
+      ),
+      true,
+    );
+    assert.equal(
+      await evaluate(client!, sessionId, `document.body.innerText.includes(${jsonString(APP_LOADING_VIEW)})`),
+      false,
+    );
+    assert.equal(
+      await evaluate(client!, sessionId, `document.body.innerText.includes(${jsonString(HISTORY_LOADING_VIEW)})`),
+      false,
+    );
+    assert.equal(
+      await evaluate(client!, sessionId, `Boolean(document.querySelector(".data-heatmap-skeleton"))`),
+      false,
+    );
   });
 
   await runTest("settings theme dialog opens and closes in a real browser", async () => {

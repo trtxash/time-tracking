@@ -63,6 +63,7 @@ function tauriStubFor(path: string) {
         isMaximized: async () => false,
         isVisible: async () => true,
         isFocused: async () => true,
+        onFocusChanged: async () => () => {},
         onResized: async () => () => {},
       };
       export function getCurrentWindow() {
@@ -167,13 +168,47 @@ await runTest("Chinese and English copy packages keep the same key structure", (
 
 await runTest("app shell keeps History and Data snapshot loaders on their owning views", () => {
   const shell = readUtf8("src/app/AppShell.tsx");
-  const historyBranch = shell.slice(shell.indexOf('currentView === "history"'), shell.indexOf('currentView === "data"'));
-  const dataBranch = shell.slice(shell.indexOf('currentView === "data"'), shell.indexOf('currentView === "settings"'));
+  const historyBranch = shell.slice(shell.indexOf("<History"), shell.indexOf("<Data"));
+  const dataBranch = shell.slice(shell.indexOf("<Data"), shell.indexOf("<Settings"));
 
   assert.match(historyBranch, /loadHistorySnapshot=\{loadHistoryRuntimeSnapshot\}/);
   assert.doesNotMatch(historyBranch, /loadDataTrendSnapshot=/);
   assert.match(dataBranch, /loadDataTrendSnapshot=\{loadDataTrendRuntimeSnapshot\}/);
   assert.doesNotMatch(dataBranch, /loadHistorySnapshot=/);
+});
+
+await runTest("Data regular view avoids visible loading and skeleton branches", () => {
+  const data = readUtf8("src/features/data/components/Data.tsx");
+
+  assert.doesNotMatch(data, /UI_TEXT\.history\.loading/);
+  assert.doesNotMatch(data, /data-heatmap-skeleton/);
+  assert.doesNotMatch(data, /aria-busy/);
+});
+
+await runTest("app shell uses feature-owned Data prewarm and heavy cache lifecycle exits", () => {
+  const shell = readUtf8("src/app/AppShell.tsx");
+
+  assert.match(shell, /prewarmDataFirstScreen/);
+  assert.match(shell, /clearDataHeavyCaches/);
+  assert.match(shell, /clearDataBootstrapCache/);
+  assert.doesNotMatch(shell, /clearDataBootstrapSnapshot/);
+  assert.doesNotMatch(shell, /buildDataTrendViewModel/);
+  assert.doesNotMatch(shell, /buildActivityHeatmap/);
+});
+
+await runTest("update snapshot listener disposes if subscription resolves after unmount", () => {
+  const hook = readUtf8("src/app/hooks/useUpdateState.ts");
+
+  assert.match(hook, /if \(cancelled\) \{\s*dispose\(\);\s*return;\s*\}/);
+});
+
+await runTest("window foreground watcher composes and releases Tauri listeners", () => {
+  const gateway = readUtf8("src/platform/desktop/windowControlGateway.ts");
+
+  assert.match(gateway, /readCurrentWindowForegroundState/);
+  assert.match(gateway, /onFocusChanged/);
+  assert.match(gateway, /onResized/);
+  assert.match(gateway, /unlisteners\.splice\(0\)/);
 });
 
 await runTest("app shell renders dashboard and primary navigation without Tauri runtime", async () => {

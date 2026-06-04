@@ -57,6 +57,11 @@ export function useUpdateState() {
       }
     })
       .then((dispose) => {
+        if (cancelled) {
+          dispose();
+          return;
+        }
+
         unlisten = dispose;
       })
       .catch((error) => {

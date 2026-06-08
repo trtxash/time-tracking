@@ -85,6 +85,12 @@ export class ClassificationService {
     return getClassificationBootstrapCache();
   }
 
+  static applyBootstrapToProcessMapper(bootstrap: ClassificationBootstrapData): void {
+    ProcessMapper.setUserOverrides(bootstrap.loadedOverrides);
+    ProcessMapper.setCategoryColorOverrides(bootstrap.loadedCategoryColorOverrides);
+    ProcessMapper.setDeletedCategories(bootstrap.loadedDeletedCategories);
+  }
+
   static async prewarmBootstrapCache(): Promise<ClassificationBootstrapData> {
     const bootstrap = await this.loadClassificationBootstrap();
     setClassificationBootstrapCache(bootstrap);

@@ -22,6 +22,11 @@ const BACKUP_SESSIONS_ENTRY_NAME: &str = "data/sessions.json";
 const BACKUP_TITLE_SAMPLES_ENTRY_NAME: &str = "data/session_title_samples.json";
 const BACKUP_SETTINGS_ENTRY_NAME: &str = "data/settings.json";
 const BACKUP_ICON_CACHE_ENTRY_NAME: &str = "data/icon_cache.json";
+const BACKUP_TOOL_REMINDERS_ENTRY_NAME: &str = "data/tool_reminders.json";
+const BACKUP_TOOL_TIMERS_ENTRY_NAME: &str = "data/tool_timers.json";
+const BACKUP_TOOL_TIMER_LAPS_ENTRY_NAME: &str = "data/tool_timer_laps.json";
+const BACKUP_TOOL_POMODORO_RUNS_ENTRY_NAME: &str = "data/tool_pomodoro_runs.json";
+const BACKUP_TOOL_DAILY_STATS_ENTRY_NAME: &str = "data/tool_daily_stats.json";
 
 #[derive(Debug, Serialize, Deserialize)]
 struct BackupArchiveManifest {
@@ -41,6 +46,16 @@ struct BackupArchiveFiles {
     title_samples: String,
     settings: String,
     icon_cache: String,
+    #[serde(default)]
+    tool_reminders: String,
+    #[serde(default)]
+    tool_timers: String,
+    #[serde(default)]
+    tool_timer_laps: String,
+    #[serde(default)]
+    tool_pomodoro_runs: String,
+    #[serde(default)]
+    tool_daily_stats: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -50,6 +65,16 @@ struct BackupArchiveCounts {
     title_samples: usize,
     settings: usize,
     icon_cache: usize,
+    #[serde(default)]
+    tool_reminders: usize,
+    #[serde(default)]
+    tool_timers: usize,
+    #[serde(default)]
+    tool_timer_laps: usize,
+    #[serde(default)]
+    tool_pomodoro_runs: usize,
+    #[serde(default)]
+    tool_daily_stats: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -115,6 +140,11 @@ async fn load_backup_payload<R: Runtime>(app: &AppHandle<R>) -> Result<BackupPay
     let title_samples = repositories::session_title_samples::fetch_all_for_backup(&pool).await?;
     let settings = repositories::settings::fetch_all_for_backup(&pool).await?;
     let icon_cache = repositories::icon_cache::fetch_all_for_backup(&pool).await?;
+    let tool_reminders = repositories::tools::fetch_all_reminders_for_backup(&pool).await?;
+    let tool_timers = repositories::tools::fetch_all_timers_for_backup(&pool).await?;
+    let tool_timer_laps = repositories::tools::fetch_all_timer_laps_for_backup(&pool).await?;
+    let tool_pomodoro_runs = repositories::tools::fetch_all_pomodoro_runs_for_backup(&pool).await?;
+    let tool_daily_stats = repositories::tools::fetch_all_daily_stats_for_backup(&pool).await?;
 
     Ok(BackupPayload {
         version: CURRENT_BACKUP_VERSION,
@@ -127,6 +157,11 @@ async fn load_backup_payload<R: Runtime>(app: &AppHandle<R>) -> Result<BackupPay
         title_samples,
         settings,
         icon_cache,
+        tool_reminders,
+        tool_timers,
+        tool_timer_laps,
+        tool_pomodoro_runs,
+        tool_daily_stats,
     })
 }
 
@@ -200,12 +235,22 @@ fn build_backup_manifest(payload: &BackupPayload) -> BackupArchiveManifest {
             title_samples: BACKUP_TITLE_SAMPLES_ENTRY_NAME.to_string(),
             settings: BACKUP_SETTINGS_ENTRY_NAME.to_string(),
             icon_cache: BACKUP_ICON_CACHE_ENTRY_NAME.to_string(),
+            tool_reminders: BACKUP_TOOL_REMINDERS_ENTRY_NAME.to_string(),
+            tool_timers: BACKUP_TOOL_TIMERS_ENTRY_NAME.to_string(),
+            tool_timer_laps: BACKUP_TOOL_TIMER_LAPS_ENTRY_NAME.to_string(),
+            tool_pomodoro_runs: BACKUP_TOOL_POMODORO_RUNS_ENTRY_NAME.to_string(),
+            tool_daily_stats: BACKUP_TOOL_DAILY_STATS_ENTRY_NAME.to_string(),
         },
         counts: BackupArchiveCounts {
             sessions: payload.sessions.len(),
             title_samples: payload.title_samples.len(),
             settings: payload.settings.len(),
             icon_cache: payload.icon_cache.len(),
+            tool_reminders: payload.tool_reminders.len(),
+            tool_timers: payload.tool_timers.len(),
+            tool_timer_laps: payload.tool_timer_laps.len(),
+            tool_pomodoro_runs: payload.tool_pomodoro_runs.len(),
+            tool_daily_stats: payload.tool_daily_stats.len(),
         },
     }
 }
@@ -249,6 +294,11 @@ fn encode_backup_archive(payload: &BackupPayload) -> Result<Vec<u8>, String> {
     let title_samples = serialize_pretty(&payload.title_samples, "title samples")?;
     let settings = serialize_pretty(&payload.settings, "settings")?;
     let icon_cache = serialize_pretty(&payload.icon_cache, "icon cache")?;
+    let tool_reminders = serialize_pretty(&payload.tool_reminders, "tool reminders")?;
+    let tool_timers = serialize_pretty(&payload.tool_timers, "tool timers")?;
+    let tool_timer_laps = serialize_pretty(&payload.tool_timer_laps, "tool timer laps")?;
+    let tool_pomodoro_runs = serialize_pretty(&payload.tool_pomodoro_runs, "tool pomodoro runs")?;
+    let tool_daily_stats = serialize_pretty(&payload.tool_daily_stats, "tool daily stats")?;
     let manifest_json = serialize_pretty(&manifest, "manifest")?;
 
     let mut checksum_files = BTreeMap::new();
@@ -265,6 +315,26 @@ fn encode_backup_archive(payload: &BackupPayload) -> Result<Vec<u8>, String> {
     checksum_files.insert(
         BACKUP_ICON_CACHE_ENTRY_NAME.to_string(),
         checksum(&icon_cache),
+    );
+    checksum_files.insert(
+        BACKUP_TOOL_REMINDERS_ENTRY_NAME.to_string(),
+        checksum(&tool_reminders),
+    );
+    checksum_files.insert(
+        BACKUP_TOOL_TIMERS_ENTRY_NAME.to_string(),
+        checksum(&tool_timers),
+    );
+    checksum_files.insert(
+        BACKUP_TOOL_TIMER_LAPS_ENTRY_NAME.to_string(),
+        checksum(&tool_timer_laps),
+    );
+    checksum_files.insert(
+        BACKUP_TOOL_POMODORO_RUNS_ENTRY_NAME.to_string(),
+        checksum(&tool_pomodoro_runs),
+    );
+    checksum_files.insert(
+        BACKUP_TOOL_DAILY_STATS_ENTRY_NAME.to_string(),
+        checksum(&tool_daily_stats),
     );
     let checksums = BackupArchiveChecksums {
         algorithm: "crc32".to_string(),
@@ -292,6 +362,36 @@ fn encode_backup_archive(payload: &BackupPayload) -> Result<Vec<u8>, String> {
         &mut archive,
         BACKUP_ICON_CACHE_ENTRY_NAME,
         &icon_cache,
+        options,
+    )?;
+    zip_write_file(
+        &mut archive,
+        BACKUP_TOOL_REMINDERS_ENTRY_NAME,
+        &tool_reminders,
+        options,
+    )?;
+    zip_write_file(
+        &mut archive,
+        BACKUP_TOOL_TIMERS_ENTRY_NAME,
+        &tool_timers,
+        options,
+    )?;
+    zip_write_file(
+        &mut archive,
+        BACKUP_TOOL_TIMER_LAPS_ENTRY_NAME,
+        &tool_timer_laps,
+        options,
+    )?;
+    zip_write_file(
+        &mut archive,
+        BACKUP_TOOL_POMODORO_RUNS_ENTRY_NAME,
+        &tool_pomodoro_runs,
+        options,
+    )?;
+    zip_write_file(
+        &mut archive,
+        BACKUP_TOOL_DAILY_STATS_ENTRY_NAME,
+        &tool_daily_stats,
         options,
     )?;
     zip_write_file(
@@ -384,6 +484,28 @@ fn backup_archive_declares_title_samples(
             .contains_key(BACKUP_TITLE_SAMPLES_ENTRY_NAME)
 }
 
+fn backup_archive_declares_entry(
+    manifest_path: &str,
+    checksums: &BackupArchiveChecksums,
+    entry_name: &str,
+) -> bool {
+    !manifest_path.trim().is_empty() || checksums.files.contains_key(entry_name)
+}
+
+fn read_optional_declared_zip_entry(
+    archive: &mut ZipArchive<Cursor<Vec<u8>>>,
+    manifest_path: &str,
+    checksums: &BackupArchiveChecksums,
+    entry_name: &str,
+    backup_path: &Path,
+) -> Result<Option<String>, String> {
+    if backup_archive_declares_entry(manifest_path, checksums, entry_name) {
+        return read_zip_entry(archive, entry_name, backup_path).map(Some);
+    }
+
+    Ok(None)
+}
+
 fn decode_structured_backup_archive(
     archive: &mut ZipArchive<Cursor<Vec<u8>>>,
     backup_path: &Path,
@@ -406,6 +528,41 @@ fn decode_structured_backup_archive(
     } else {
         None
     };
+    let tool_reminders_json = read_optional_declared_zip_entry(
+        archive,
+        &manifest.files.tool_reminders,
+        &checksums,
+        BACKUP_TOOL_REMINDERS_ENTRY_NAME,
+        backup_path,
+    )?;
+    let tool_timers_json = read_optional_declared_zip_entry(
+        archive,
+        &manifest.files.tool_timers,
+        &checksums,
+        BACKUP_TOOL_TIMERS_ENTRY_NAME,
+        backup_path,
+    )?;
+    let tool_timer_laps_json = read_optional_declared_zip_entry(
+        archive,
+        &manifest.files.tool_timer_laps,
+        &checksums,
+        BACKUP_TOOL_TIMER_LAPS_ENTRY_NAME,
+        backup_path,
+    )?;
+    let tool_pomodoro_runs_json = read_optional_declared_zip_entry(
+        archive,
+        &manifest.files.tool_pomodoro_runs,
+        &checksums,
+        BACKUP_TOOL_POMODORO_RUNS_ENTRY_NAME,
+        backup_path,
+    )?;
+    let tool_daily_stats_json = read_optional_declared_zip_entry(
+        archive,
+        &manifest.files.tool_daily_stats,
+        &checksums,
+        BACKUP_TOOL_DAILY_STATS_ENTRY_NAME,
+        backup_path,
+    )?;
     let mut checksum_entries = vec![
         (BACKUP_MANIFEST_ENTRY_NAME, manifest_json.as_str()),
         (BACKUP_SESSIONS_ENTRY_NAME, sessions_json.as_str()),
@@ -414,6 +571,24 @@ fn decode_structured_backup_archive(
     ];
     if let Some(title_samples_json) = title_samples_json.as_deref() {
         checksum_entries.push((BACKUP_TITLE_SAMPLES_ENTRY_NAME, title_samples_json));
+    }
+    if let Some(tool_reminders_json) = tool_reminders_json.as_deref() {
+        checksum_entries.push((BACKUP_TOOL_REMINDERS_ENTRY_NAME, tool_reminders_json));
+    }
+    if let Some(tool_timers_json) = tool_timers_json.as_deref() {
+        checksum_entries.push((BACKUP_TOOL_TIMERS_ENTRY_NAME, tool_timers_json));
+    }
+    if let Some(tool_timer_laps_json) = tool_timer_laps_json.as_deref() {
+        checksum_entries.push((BACKUP_TOOL_TIMER_LAPS_ENTRY_NAME, tool_timer_laps_json));
+    }
+    if let Some(tool_pomodoro_runs_json) = tool_pomodoro_runs_json.as_deref() {
+        checksum_entries.push((
+            BACKUP_TOOL_POMODORO_RUNS_ENTRY_NAME,
+            tool_pomodoro_runs_json,
+        ));
+    }
+    if let Some(tool_daily_stats_json) = tool_daily_stats_json.as_deref() {
+        checksum_entries.push((BACKUP_TOOL_DAILY_STATS_ENTRY_NAME, tool_daily_stats_json));
     }
     verify_backup_checksums(&checksums, &checksum_entries, backup_path)?;
 
@@ -425,6 +600,26 @@ fn decode_structured_backup_archive(
     let settings = parse_json::<Vec<BackupSetting>>(&settings_json, backup_path, "settings")?;
     let icon_cache =
         parse_json::<Vec<BackupIconCache>>(&icon_cache_json, backup_path, "icon cache")?;
+    let tool_reminders = tool_reminders_json
+        .map(|json| parse_json(&json, backup_path, "tool reminders"))
+        .transpose()?
+        .unwrap_or_default();
+    let tool_timers = tool_timers_json
+        .map(|json| parse_json(&json, backup_path, "tool timers"))
+        .transpose()?
+        .unwrap_or_default();
+    let tool_timer_laps = tool_timer_laps_json
+        .map(|json| parse_json(&json, backup_path, "tool timer laps"))
+        .transpose()?
+        .unwrap_or_default();
+    let tool_pomodoro_runs = tool_pomodoro_runs_json
+        .map(|json| parse_json(&json, backup_path, "tool pomodoro runs"))
+        .transpose()?
+        .unwrap_or_default();
+    let tool_daily_stats = tool_daily_stats_json
+        .map(|json| parse_json(&json, backup_path, "tool daily stats"))
+        .transpose()?
+        .unwrap_or_default();
 
     Ok(BackupPayload {
         version: manifest.backup_version,
@@ -437,6 +632,11 @@ fn decode_structured_backup_archive(
         title_samples,
         settings,
         icon_cache,
+        tool_reminders,
+        tool_timers,
+        tool_timer_laps,
+        tool_pomodoro_runs,
+        tool_daily_stats,
     })
 }
 
@@ -519,6 +719,7 @@ async fn restore_backup_payload(
             repositories::sessions::clear_for_restore(&mut tx).await?;
             repositories::settings::clear_for_restore(&mut tx).await?;
             repositories::icon_cache::clear_for_restore(&mut tx).await?;
+            repositories::tools::clear_for_restore(&mut tx).await?;
 
             repositories::sessions::insert_for_restore(&mut tx, &payload.sessions).await?;
             let session_id_map =
@@ -532,6 +733,15 @@ async fn restore_backup_payload(
             .await?;
             repositories::settings::insert_for_restore(&mut tx, &payload.settings).await?;
             repositories::icon_cache::insert_for_restore(&mut tx, &payload.icon_cache).await?;
+            repositories::tools::insert_for_restore(
+                &mut tx,
+                &payload.tool_reminders,
+                &payload.tool_timers,
+                &payload.tool_timer_laps,
+                &payload.tool_pomodoro_runs,
+                &payload.tool_daily_stats,
+            )
+            .await?;
         }
         RestoreStrategy::Merge => {
             repositories::sessions::insert_missing_for_restore(&mut tx, &payload.sessions).await?;
@@ -547,6 +757,15 @@ async fn restore_backup_payload(
             repositories::settings::insert_missing_for_restore(&mut tx, &payload.settings).await?;
             repositories::icon_cache::insert_missing_for_restore(&mut tx, &payload.icon_cache)
                 .await?;
+            repositories::tools::insert_missing_for_restore(
+                &mut tx,
+                &payload.tool_reminders,
+                &payload.tool_timers,
+                &payload.tool_timer_laps,
+                &payload.tool_pomodoro_runs,
+                &payload.tool_daily_stats,
+            )
+            .await?;
         }
     }
 
@@ -617,6 +836,11 @@ mod tests {
                 icon_base64: "aWNvbg==".to_string(),
                 last_updated: Some(30),
             }],
+            tool_reminders: Vec::new(),
+            tool_timers: Vec::new(),
+            tool_timer_laps: Vec::new(),
+            tool_pomodoro_runs: Vec::new(),
+            tool_daily_stats: Vec::new(),
         };
 
         let archive = encode_backup_archive(&payload).unwrap();
@@ -664,6 +888,11 @@ mod tests {
                 icon_base64: "aWNvbg==".to_string(),
                 last_updated: Some(30),
             }],
+            tool_reminders: Vec::new(),
+            tool_timers: Vec::new(),
+            tool_timer_laps: Vec::new(),
+            tool_pomodoro_runs: Vec::new(),
+            tool_daily_stats: Vec::new(),
         };
 
         let archive = encode_backup_archive(&payload).unwrap();
@@ -690,12 +919,22 @@ mod tests {
                 title_samples: String::new(),
                 settings: BACKUP_SETTINGS_ENTRY_NAME.to_string(),
                 icon_cache: BACKUP_ICON_CACHE_ENTRY_NAME.to_string(),
+                tool_reminders: String::new(),
+                tool_timers: String::new(),
+                tool_timer_laps: String::new(),
+                tool_pomodoro_runs: String::new(),
+                tool_daily_stats: String::new(),
             },
             counts: BackupArchiveCounts {
                 sessions: 0,
                 title_samples: 0,
                 settings: 0,
                 icon_cache: 0,
+                tool_reminders: 0,
+                tool_timers: 0,
+                tool_timer_laps: 0,
+                tool_pomodoro_runs: 0,
+                tool_daily_stats: 0,
             },
         };
         let manifest_json = serialize_pretty(&manifest, "manifest").unwrap();
@@ -764,12 +1003,22 @@ mod tests {
                 title_samples: BACKUP_TITLE_SAMPLES_ENTRY_NAME.to_string(),
                 settings: BACKUP_SETTINGS_ENTRY_NAME.to_string(),
                 icon_cache: BACKUP_ICON_CACHE_ENTRY_NAME.to_string(),
+                tool_reminders: String::new(),
+                tool_timers: String::new(),
+                tool_timer_laps: String::new(),
+                tool_pomodoro_runs: String::new(),
+                tool_daily_stats: String::new(),
             },
             counts: BackupArchiveCounts {
                 sessions: 0,
                 title_samples: 1,
                 settings: 0,
                 icon_cache: 0,
+                tool_reminders: 0,
+                tool_timers: 0,
+                tool_timer_laps: 0,
+                tool_pomodoro_runs: 0,
+                tool_daily_stats: 0,
             },
         };
         let manifest_json = serialize_pretty(&manifest, "manifest").unwrap();
@@ -860,6 +1109,9 @@ mod tests {
         pool.execute(db_schema::CURRENT_BASELINE_SCHEMA_SQL)
             .await
             .unwrap();
+        pool.execute(db_schema::TOOLS_TABLES_SCHEMA_SQL)
+            .await
+            .unwrap();
         pool
     }
 
@@ -926,6 +1178,11 @@ mod tests {
                     icon_base64: "bmV3aWNvbg==".to_string(),
                     last_updated: Some(5678),
                 }],
+                tool_reminders: Vec::new(),
+                tool_timers: Vec::new(),
+                tool_timer_laps: Vec::new(),
+                tool_pomodoro_runs: Vec::new(),
+                tool_daily_stats: Vec::new(),
             };
 
             let result =
@@ -1002,6 +1259,11 @@ mod tests {
                 ],
                 settings: Vec::new(),
                 icon_cache: Vec::new(),
+                tool_reminders: Vec::new(),
+                tool_timers: Vec::new(),
+                tool_timer_laps: Vec::new(),
+                tool_pomodoro_runs: Vec::new(),
+                tool_daily_stats: Vec::new(),
             };
 
             restore_backup_payload(&pool, &payload, RestoreStrategy::Replace)
@@ -1066,6 +1328,11 @@ mod tests {
                 ],
                 settings: Vec::new(),
                 icon_cache: Vec::new(),
+                tool_reminders: Vec::new(),
+                tool_timers: Vec::new(),
+                tool_timer_laps: Vec::new(),
+                tool_pomodoro_runs: Vec::new(),
+                tool_daily_stats: Vec::new(),
             };
 
             restore_backup_payload(&pool, &payload, RestoreStrategy::Replace)
@@ -1167,6 +1434,11 @@ mod tests {
                         last_updated: Some(3),
                     },
                 ],
+                tool_reminders: Vec::new(),
+                tool_timers: Vec::new(),
+                tool_timer_laps: Vec::new(),
+                tool_pomodoro_runs: Vec::new(),
+                tool_daily_stats: Vec::new(),
             };
 
             restore_backup_payload(&pool, &payload, RestoreStrategy::Merge)
@@ -1264,6 +1536,11 @@ mod tests {
                 }],
                 settings: Vec::new(),
                 icon_cache: Vec::new(),
+                tool_reminders: Vec::new(),
+                tool_timers: Vec::new(),
+                tool_timer_laps: Vec::new(),
+                tool_pomodoro_runs: Vec::new(),
+                tool_daily_stats: Vec::new(),
             };
 
             restore_backup_payload(&pool, &payload, RestoreStrategy::Merge)

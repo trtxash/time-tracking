@@ -166,10 +166,33 @@
   min-width: 0;
 }
 
+.qp-page-header-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
 .qp-page-header-title {
   font-size: 1.1rem;
   font-weight: 600;
   color: var(--qp-text-primary);
+}
+
+.qp-page-header-beta {
+  display: inline-flex;
+  height: 18px;
+  align-items: center;
+  border: 1px solid var(--qp-border-subtle);
+  border-radius: var(--qp-radius-chip);
+  background: var(--qp-bg-elevated);
+  padding: 0 6px;
+  color: var(--qp-text-tertiary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .qp-page-header-subtitle {
@@ -239,6 +262,233 @@
 
 .qp-input[type="number"] {
   appearance: textfield;
+}
+
+.qp-date-picker,
+.qp-time-picker {
+  min-width: 0;
+}
+
+.qp-date-picker-trigger,
+.qp-time-picker-trigger {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.qp-date-picker-trigger:hover:not(:disabled),
+.qp-date-picker-trigger-open,
+.qp-time-picker-trigger:hover:not(:disabled),
+.qp-time-picker-trigger-open {
+  border-color: color-mix(in srgb, var(--qp-accent-default) 26%, var(--qp-border-subtle));
+  background: var(--qp-bg-elevated);
+}
+
+.qp-date-picker-trigger svg,
+.qp-time-picker-trigger svg {
+  flex: 0 0 auto;
+  color: var(--qp-text-tertiary);
+}
+
+.qp-calendar-popover {
+  position: fixed;
+  z-index: 90;
+  width: 236px;
+  translate: -50% 0;
+  border: 1px solid var(--qp-border-subtle);
+  border-radius: var(--qp-radius-panel);
+  background: var(--qp-bg-canvas);
+  box-shadow: var(--qp-shadow-overlay);
+  padding: 10px;
+}
+
+.qp-calendar-popover-bottom {
+  transform-origin: top center;
+}
+
+.qp-calendar-popover-top {
+  transform-origin: bottom center;
+}
+
+.qp-calendar-header {
+  display: grid;
+  grid-template-columns: 28px 1fr 28px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.qp-calendar-title {
+  color: var(--qp-text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.qp-calendar-nav {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--qp-border-subtle);
+  border-radius: 7px;
+  background: var(--qp-bg-panel);
+  color: var(--qp-text-secondary);
+}
+
+.qp-calendar-nav:hover:not(:disabled) {
+  border-color: var(--qp-border-strong);
+  color: var(--qp-text-primary);
+}
+
+.qp-calendar-nav:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+.qp-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.qp-calendar-weekdays {
+  margin-bottom: 5px;
+  color: var(--qp-text-tertiary);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.qp-calendar-day {
+  display: inline-flex;
+  min-width: 0;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--qp-text-secondary);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.qp-calendar-day:hover:not(:disabled) {
+  border-color: var(--qp-border-subtle);
+  background: var(--qp-bg-elevated);
+  color: var(--qp-text-primary);
+}
+
+.qp-calendar-day-muted {
+  color: color-mix(in srgb, var(--qp-text-tertiary) 72%, transparent);
+}
+
+.qp-calendar-day-today:not(.qp-calendar-day-selected) {
+  border-color: color-mix(in srgb, var(--qp-accent-default) 24%, transparent);
+}
+
+.qp-calendar-day-selected,
+.qp-calendar-day-selected:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--qp-accent-default) 58%, var(--qp-border-subtle));
+  background: var(--qp-accent-muted);
+  color: var(--qp-accent-default);
+}
+
+.qp-calendar-day:disabled {
+  cursor: not-allowed;
+  opacity: 0.28;
+}
+
+.qp-time-picker-popover {
+  position: fixed;
+  z-index: 90;
+  width: 176px;
+  translate: -50% 0;
+  border: 1px solid var(--qp-border-subtle);
+  border-radius: var(--qp-radius-panel);
+  background: var(--qp-bg-canvas);
+  box-shadow: var(--qp-shadow-overlay);
+  padding: 8px;
+}
+
+.qp-time-picker-popover-bottom {
+  transform-origin: top center;
+}
+
+.qp-time-picker-popover-top {
+  transform-origin: bottom center;
+}
+
+.qp-time-picker-title {
+  margin-bottom: 7px;
+  color: var(--qp-text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.qp-time-picker-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.qp-time-picker-column {
+  min-width: 0;
+}
+
+.qp-time-picker-column-title {
+  margin-bottom: 5px;
+  color: var(--qp-text-tertiary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.qp-time-picker-list {
+  display: grid;
+  max-height: 170px;
+  gap: 3px;
+  overflow-y: auto;
+  border: 1px solid var(--qp-border-subtle);
+  border-radius: 8px;
+  background: var(--qp-bg-panel);
+  padding: 4px;
+}
+
+.qp-time-picker-option {
+  display: inline-flex;
+  min-width: 0;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--qp-text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.qp-time-picker-option:hover {
+  border-color: var(--qp-border-subtle);
+  background: var(--qp-bg-elevated);
+  color: var(--qp-text-primary);
+}
+
+.qp-time-picker-option-selected,
+.qp-time-picker-option-selected:hover {
+  border-color: color-mix(in srgb, var(--qp-accent-default) 58%, var(--qp-border-subtle));
+  background: var(--qp-accent-muted);
+  color: var(--qp-accent-default);
 }
 
 .qp-chip {

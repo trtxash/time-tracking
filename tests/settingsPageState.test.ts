@@ -147,6 +147,11 @@ function buildPreview(overrides: Partial<BackupPreview> = {}): BackupPreview {
     titleSampleCount: 12,
     settingCount: 10,
     iconCacheCount: 5,
+    toolReminderCount: 0,
+    toolTimerCount: 0,
+    toolTimerLapCount: 0,
+    toolPomodoroRunCount: 0,
+    toolDailyStatsCount: 0,
     ...overrides,
   };
 }
@@ -348,7 +353,6 @@ await runTest("normalizeSettingsRecord accepts current minimize behavior values"
   assert.equal(defaultSettings.localApiEnabled, false);
   assert.equal(defaultSettings.localApiPort, 17321);
   assert.equal(defaultSettings.localApiToken, "");
-
   const localApiSettings = normalizeSettingsRecord({
     local_api_enabled: "1",
     local_api_port: "18080",

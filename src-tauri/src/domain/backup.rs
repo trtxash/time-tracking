@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const CURRENT_BACKUP_VERSION: u32 = 1;
-pub const CURRENT_BACKUP_SCHEMA_VERSION: u32 = 5;
+pub const CURRENT_BACKUP_SCHEMA_VERSION: u32 = 7;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BackupMeta {
@@ -46,6 +46,67 @@ pub struct BackupIconCache {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BackupToolReminder {
+    pub id: i64,
+    pub label: String,
+    pub scheduled_at: i64,
+    pub created_at: i64,
+    pub status: String,
+    pub fired_at: Option<i64>,
+    pub cancelled_at: Option<i64>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BackupToolTimer {
+    pub id: i64,
+    pub mode: String,
+    pub label: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub accumulated_ms: i64,
+    pub started_at: Option<i64>,
+    pub paused_at: Option<i64>,
+    pub completed_at: Option<i64>,
+    pub status: String,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BackupToolTimerLap {
+    pub id: i64,
+    pub timer_id: i64,
+    pub lap_index: i64,
+    pub started_at: i64,
+    pub ended_at: i64,
+    pub duration_ms: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BackupToolPomodoroRun {
+    pub id: i64,
+    pub phase: String,
+    pub status: String,
+    pub cycle_index: i64,
+    pub focus_ms: i64,
+    pub short_break_ms: i64,
+    pub long_break_ms: i64,
+    pub long_break_every: i64,
+    pub phase_started_at: Option<i64>,
+    pub phase_paused_at: Option<i64>,
+    pub phase_remaining_ms: Option<i64>,
+    pub completed_focus_count: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BackupToolDailyStats {
+    pub date_key: String,
+    pub completed_pomodoros: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BackupPayload {
     pub version: u32,
     pub meta: BackupMeta,
@@ -54,6 +115,16 @@ pub struct BackupPayload {
     pub title_samples: Vec<BackupTitleSample>,
     pub settings: Vec<BackupSetting>,
     pub icon_cache: Vec<BackupIconCache>,
+    #[serde(default)]
+    pub tool_reminders: Vec<BackupToolReminder>,
+    #[serde(default)]
+    pub tool_timers: Vec<BackupToolTimer>,
+    #[serde(default)]
+    pub tool_timer_laps: Vec<BackupToolTimerLap>,
+    #[serde(default)]
+    pub tool_pomodoro_runs: Vec<BackupToolPomodoroRun>,
+    #[serde(default)]
+    pub tool_daily_stats: Vec<BackupToolDailyStats>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -70,6 +141,11 @@ pub struct BackupPreview {
     pub title_sample_count: usize,
     pub setting_count: usize,
     pub icon_cache_count: usize,
+    pub tool_reminder_count: usize,
+    pub tool_timer_count: usize,
+    pub tool_timer_lap_count: usize,
+    pub tool_pomodoro_run_count: usize,
+    pub tool_daily_stats_count: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -145,6 +221,11 @@ impl BackupPayload {
             title_sample_count: self.title_samples.len(),
             setting_count: self.settings.len(),
             icon_cache_count: self.icon_cache.len(),
+            tool_reminder_count: self.tool_reminders.len(),
+            tool_timer_count: self.tool_timers.len(),
+            tool_timer_lap_count: self.tool_timer_laps.len(),
+            tool_pomodoro_run_count: self.tool_pomodoro_runs.len(),
+            tool_daily_stats_count: self.tool_daily_stats.len(),
         }
     }
 }
@@ -190,6 +271,11 @@ mod tests {
                 icon_base64: "aWNvbg==".to_string(),
                 last_updated: Some(30),
             }],
+            tool_reminders: Vec::new(),
+            tool_timers: Vec::new(),
+            tool_timer_laps: Vec::new(),
+            tool_pomodoro_runs: Vec::new(),
+            tool_daily_stats: Vec::new(),
         }
     }
 
@@ -241,5 +327,7 @@ mod tests {
         assert_eq!(preview.title_sample_count, 1);
         assert_eq!(preview.setting_count, 1);
         assert_eq!(preview.icon_cache_count, 1);
+        assert_eq!(preview.tool_reminder_count, 0);
+        assert_eq!(preview.tool_timer_count, 0);
     }
 }

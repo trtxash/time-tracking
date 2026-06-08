@@ -72,6 +72,7 @@ pub fn setup(
         runtime_health.clone(),
     );
     runtime_tasks::spawn_tracking_watchdog_restart_loop(app.handle().clone(), runtime_health);
+    runtime_tasks::spawn_tools_runtime_restart_loop(app.handle().clone());
 
     Ok(())
 }

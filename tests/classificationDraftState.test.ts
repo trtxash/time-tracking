@@ -21,6 +21,7 @@ import {
   resolveLegacyAutoClassification,
 } from "../src/features/classification/services/legacyAutoClassificationMigration.ts";
 import {
+  ClassificationService,
   type ClassificationCommitDeps,
   commitDraftChangesWithDeps,
   createClassificationCommitDeps,
@@ -571,6 +572,35 @@ await runTest("default classification commit deps keep ProcessMapper runtime syn
   const deps = createClassificationCommitDeps(async () => {});
 
   await commitDraftChangesWithDeps(saved, draft, deps);
+
+  assert.equal(ProcessMapper.getUserOverride("chrome.exe")?.displayName, "Work Browser");
+  assert.equal(ProcessMapper.getCategoryColorOverride("development"), "#112233");
+  assert.equal(ProcessMapper.isCategoryDeleted("music"), true);
+
+  ProcessMapper.clearUserOverrides();
+  ProcessMapper.clearCategoryColorOverrides();
+  ProcessMapper.setDeletedCategories([]);
+});
+
+await runTest("classification bootstrap sync applies saved process mapper state", () => {
+  ProcessMapper.clearUserOverrides();
+  ProcessMapper.clearCategoryColorOverrides();
+  ProcessMapper.setDeletedCategories([]);
+
+  ClassificationService.applyBootstrapToProcessMapper({
+    observed: [],
+    loadedOverrides: {
+      "chrome.exe": {
+        enabled: true,
+        displayName: "Work Browser",
+      },
+    },
+    loadedCategoryColorOverrides: {
+      development: "#112233",
+    },
+    loadedCustomCategories: [],
+    loadedDeletedCategories: ["music"],
+  });
 
   assert.equal(ProcessMapper.getUserOverride("chrome.exe")?.displayName, "Work Browser");
   assert.equal(ProcessMapper.getCategoryColorOverride("development"), "#112233");

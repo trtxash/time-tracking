@@ -1,3 +1,4 @@
+use crate::engine::tools as tools_runtime;
 use crate::engine::tracking::{runtime as tracking_runtime, watchdog as tracking_watchdog};
 use crate::engine::updater::{self, UpdaterRuntimeState};
 use std::sync::Arc;
@@ -53,6 +54,26 @@ pub(crate) fn spawn_tracking_watchdog_restart_loop<R: Runtime + 'static>(
                 let delay = retry_delay.next_delay();
                 eprintln!(
                     "[tracker] restarting watchdog in {} seconds...",
+                    delay.as_secs()
+                );
+                sleep(delay).await;
+                continue;
+            }
+
+            break;
+        }
+    });
+}
+
+pub(crate) fn spawn_tools_runtime_restart_loop<R: Runtime + 'static>(app: AppHandle<R>) {
+    tauri::async_runtime::spawn(async move {
+        let mut retry_delay = RestartBackoff::new();
+        loop {
+            if let Err(error) = tools_runtime::run(app.clone()).await {
+                eprintln!("[tools] runtime stopped: {error}");
+                let delay = retry_delay.next_delay();
+                eprintln!(
+                    "[tools] restarting tools runtime in {} seconds...",
                     delay.as_secs()
                 );
                 sleep(delay).await;

@@ -4,5 +4,6 @@ pub mod handles;
 pub mod icon;
 pub mod input;
 pub mod media;
+pub mod notifications;
 pub mod power;
 pub mod resource;

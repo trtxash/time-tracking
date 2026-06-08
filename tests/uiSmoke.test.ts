@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { resolve } from "node:path";
-import * as esbuild from "esbuild";
+import ts from "typescript";
 import { COPY } from "../src/shared/copy/uiText.ts";
 
 const EXPECTED_VIEWS = [
@@ -10,6 +9,7 @@ const EXPECTED_VIEWS = [
   "history",
   "data",
   "mapping",
+  "tools",
   "settings",
   "about",
 ] as const;
@@ -19,6 +19,7 @@ const EXPECTED_NAV_LABELS = [
   "历史",
   "数据",
   "应用",
+  "工具",
   "设置",
   "关于",
 ] as const;
@@ -53,99 +54,248 @@ function collectCopyKeyPaths(value: unknown, prefix = ""): string[] {
 
 function tauriStubFor(path: string) {
   if (path === "@tauri-apps/api/window") {
-    return `
-      const noop = async () => {};
-      const currentWindow = {
-        minimize: noop,
-        toggleMaximize: noop,
-        close: noop,
-        startDragging: noop,
-        isMaximized: async () => false,
-        isVisible: async () => true,
-        isFocused: async () => true,
-        onFocusChanged: async () => () => {},
-        onResized: async () => () => {},
-      };
-      export function getCurrentWindow() {
-        return currentWindow;
-      }
-    `;
+    const noop = async () => {};
+    const currentWindow = {
+      minimize: noop,
+      toggleMaximize: noop,
+      close: noop,
+      startDragging: noop,
+      isMaximized: async () => false,
+      isVisible: async () => true,
+      isFocused: async () => true,
+      onFocusChanged: async () => () => {},
+      onResized: async () => () => {},
+    };
+    return {
+      getCurrentWindow: () => currentWindow,
+    };
   }
 
   if (path === "@tauri-apps/api/webviewWindow") {
-    return `
-      export function getCurrentWebviewWindow() {
-        return { label: "main" };
-      }
-    `;
+    return {
+      getCurrentWebviewWindow: () => ({ label: "main" }),
+    };
   }
 
   if (path === "@tauri-apps/api/core") {
-    return `
-      export async function invoke() {
-        return null;
-      }
-      export class Channel {
+    return {
+      invoke: async () => null,
+      Channel: class Channel {
         onmessage = null;
-        constructor() {}
-      }
-    `;
+      },
+    };
   }
 
   if (path === "@tauri-apps/api/event") {
-    return `
-      export async function listen() {
-        return () => {};
-      }
-      export async function emit() {}
-    `;
+    return {
+      listen: async () => () => {},
+      emit: async () => {},
+    };
   }
 
   if (path === "@tauri-apps/api/app") {
-    return `
-      export async function getVersion() {
-        return "0.0.0-smoke";
-      }
-    `;
+    return {
+      getVersion: async () => "0.0.0-smoke",
+    };
   }
 
   if (path === "@tauri-apps/plugin-opener") {
-    return `
-      export async function openUrl() {}
-    `;
+    return {
+      openUrl: async () => {},
+    };
   }
 
   if (path === "@tauri-apps/plugin-sql") {
-    return `
-      export default class Database {
-        static async load() {
-          return new Database();
-        }
-        async select() {
-          return [];
-        }
-        async execute() {}
-        async close() {}
+    return class Database {
+      static async load() {
+        return new Database();
       }
-    `;
+
+      async select() {
+        return [];
+      }
+
+      async execute() {}
+
+      async close() {}
+    };
   }
 
   throw new Error(`Missing Tauri smoke stub for ${path}`);
 }
 
-const tauriSmokeStubPlugin: esbuild.Plugin = {
-  name: "tauri-smoke-stubs",
-  setup(build) {
-    build.onResolve({ filter: /^@tauri-apps\// }, (args) => ({
-      path: args.path,
-      namespace: "tauri-smoke-stub",
-    }));
-    build.onLoad({ filter: /.*/, namespace: "tauri-smoke-stub" }, (args) => ({
-      contents: tauriStubFor(args.path),
-      loader: "js",
-    }));
-  },
-};
+function createMotionStub() {
+  const React = require("react") as typeof import("react");
+  const cache = new Map<string | symbol, unknown>();
+  const ignoredMotionProps = new Set([
+    "animate",
+    "exit",
+    "initial",
+    "layout",
+    "transition",
+    "variants",
+    "whileHover",
+    "whileTap",
+  ]);
+
+  const motion = new Proxy({}, {
+    get(_target, prop) {
+      if (prop === "__esModule") return false;
+      if (cache.has(prop)) return cache.get(prop);
+      const tag = String(prop);
+      const Component = React.forwardRef((props: Record<string, unknown>, ref) => {
+        const domProps: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(props)) {
+          if (!ignoredMotionProps.has(key)) {
+            domProps[key] = value;
+          }
+        }
+        return React.createElement(tag, { ...domProps, ref });
+      });
+      cache.set(prop, Component);
+      return Component;
+    },
+  });
+
+  return {
+    AnimatePresence: ({ children }: { children?: unknown }) => (
+      React.createElement(React.Fragment, null, children)
+    ),
+    motion,
+  };
+}
+
+function createRechartsStub() {
+  const React = require("react") as typeof import("react");
+  const Container = ({ children }: { children?: unknown }) => (
+    React.createElement("div", null, children)
+  );
+  const Empty = () => null;
+
+  return {
+    Area: Container,
+    AreaChart: Container,
+    Bar: Container,
+    BarChart: Container,
+    CartesianGrid: Empty,
+    Cell: Empty,
+    Pie: Container,
+    PieChart: Container,
+    Rectangle: Empty,
+    ResponsiveContainer: Container,
+    Tooltip: Empty,
+    XAxis: Empty,
+    YAxis: Empty,
+  };
+}
+
+function createLucideStub() {
+  const React = require("react") as typeof import("react");
+  const cache = new Map<string | symbol, unknown>();
+
+  return new Proxy({}, {
+    get(_target, prop) {
+      if (prop === "__esModule") return false;
+      if (cache.has(prop)) return cache.get(prop);
+      const Component = (props: Record<string, unknown>) => (
+        React.createElement("svg", {
+          ...props,
+          "aria-hidden": props["aria-hidden"] ?? true,
+          focusable: false,
+        })
+      );
+      cache.set(prop, Component);
+      return Component;
+    },
+  });
+}
+
+function installSmokeRenderHooks() {
+  const Module = require("node:module") as {
+    _load: (request: string, parent: unknown, isMain: boolean) => unknown;
+  };
+  const originalLoad = Module._load;
+  const originalTs = require.extensions[".ts"];
+  const originalTsx = require.extensions[".tsx"];
+  const originalCss = require.extensions[".css"];
+  const originalPng = require.extensions[".png"];
+
+  const transpile = (module: NodeJS.Module, filename: string) => {
+    const source = readFileSync(filename, "utf8")
+      .replaceAll("import.meta.env.DEV", "false");
+    const output = ts.transpileModule(source, {
+      fileName: filename,
+      compilerOptions: {
+        allowSyntheticDefaultImports: true,
+        esModuleInterop: true,
+        jsx: ts.JsxEmit.ReactJSX,
+        module: ts.ModuleKind.CommonJS,
+        moduleResolution: ts.ModuleResolutionKind.NodeJs,
+        target: ts.ScriptTarget.ES2020,
+      },
+    }).outputText;
+    module._compile(output, filename);
+  };
+
+  require.extensions[".ts"] = transpile;
+  require.extensions[".tsx"] = transpile;
+  require.extensions[".css"] = (module) => {
+    module._compile("module.exports = {};", "");
+  };
+  require.extensions[".png"] = (module) => {
+    module._compile("module.exports = 'data:image/png;base64,';", "");
+  };
+
+  Module._load = function smokeLoad(request: string, parent: unknown, isMain: boolean) {
+    if (request.startsWith("@tauri-apps/")) {
+      return tauriStubFor(request);
+    }
+    if (request === "framer-motion") {
+      return createMotionStub();
+    }
+    if (request === "lucide-react") {
+      return createLucideStub();
+    }
+    if (request === "recharts") {
+      return createRechartsStub();
+    }
+    return originalLoad.call(this, request, parent, isMain);
+  };
+
+  return () => {
+    Module._load = originalLoad;
+    require.extensions[".ts"] = originalTs;
+    require.extensions[".tsx"] = originalTsx;
+    require.extensions[".css"] = originalCss;
+    require.extensions[".png"] = originalPng;
+  };
+}
+
+function renderAppShellForSmoke() {
+  const restoreHooks = installSmokeRenderHooks();
+  try {
+    const React = require("react") as typeof import("react");
+    const { renderToString } = require("react-dom/server") as typeof import("react-dom/server");
+    const AppShellModule = require("../src/app/AppShell.tsx") as {
+      default: React.ComponentType;
+    };
+
+    const originalWarn = console.warn;
+    console.warn = (...args) => {
+      if (String(args[0] ?? "").includes("width(-1) and height(-1) of chart")) {
+        return;
+      }
+      originalWarn(...args);
+    };
+    try {
+      return renderToString(React.createElement(AppShellModule.default));
+    } finally {
+      console.warn = originalWarn;
+    }
+  } finally {
+    restoreHooks();
+  }
+}
 
 await runTest("app shell declares every primary desktop view", () => {
   const viewType = readUtf8("src/app/types/view.ts");
@@ -276,49 +426,7 @@ await runTest("window foreground watcher composes and releases Tauri listeners",
 });
 
 await runTest("app shell renders dashboard and primary navigation without Tauri runtime", async () => {
-  const entry = `
-    import React from "react";
-    import { renderToString } from "react-dom/server";
-    import AppShell from "./src/app/AppShell.tsx";
-
-    const originalWarn = console.warn;
-    console.warn = (...args) => {
-      if (String(args[0] ?? "").includes("width(-1) and height(-1) of chart")) {
-        return;
-      }
-      originalWarn(...args);
-    };
-    export const html = renderToString(React.createElement(AppShell));
-    console.warn = originalWarn;
-  `;
-  const result = await esbuild.build({
-    stdin: {
-      contents: entry,
-      resolveDir: process.cwd(),
-      loader: "tsx",
-    },
-    bundle: true,
-    write: false,
-    platform: "node",
-    format: "cjs",
-    loader: {
-      ".png": "dataurl",
-      ".css": "empty",
-    },
-    plugins: [tauriSmokeStubPlugin],
-  });
-  const bundled = result.outputFiles[0]?.text;
-  assert.ok(bundled);
-
-  const bundlePath = "tests/.tmp-ui-smoke-bundle.cjs";
-  writeFileSync(bundlePath, bundled, "utf8");
-  let html = "";
-  try {
-    const module = require(resolve(bundlePath)) as { html: string };
-    html = module.html;
-  } finally {
-    unlinkSync(bundlePath);
-  }
+  const html = renderAppShellForSmoke();
 
   for (const label of EXPECTED_NAV_LABELS) {
     assert.ok(html.includes(`aria-label="${label}"`), `missing nav label ${label}`);

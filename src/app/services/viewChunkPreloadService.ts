@@ -1,6 +1,6 @@
 import { createElement, type ComponentType } from "react";
 
-export type PreloadableView = "history" | "settings" | "mapping" | "data" | "about";
+export type PreloadableView = "history" | "settings" | "mapping" | "data" | "tools" | "about";
 
 export interface LazyViewChunkPreloadOptions {
   views?: PreloadableView[];
@@ -29,7 +29,7 @@ type IdleWindow = Window & typeof globalThis & {
   cancelIdleCallback?: (handle: number) => void;
 };
 
-const DEFAULT_PRELOADABLE_VIEWS: PreloadableView[] = ["history", "data", "mapping", "settings", "about"];
+const DEFAULT_PRELOADABLE_VIEWS: PreloadableView[] = ["history", "data", "mapping", "tools", "settings", "about"];
 const DEFAULT_INITIAL_DELAY_MS = 1200;
 const DEFAULT_STAGGER_MS = 200;
 const DEFAULT_IDLE_TIMEOUT_MS = 1500;
@@ -39,6 +39,7 @@ const DEFAULT_VIEW_CHUNK_LOADERS: ViewChunkLoaders = {
   settings: () => import("../../features/settings/components/Settings"),
   mapping: () => import("../../features/classification/components/AppMapping"),
   data: () => import("../../features/data/components/Data"),
+  tools: () => import("../../features/tools/components/Tools"),
   about: () => import("../../features/about/components/About"),
 };
 

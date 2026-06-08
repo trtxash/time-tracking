@@ -1,6 +1,6 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { motion } from "framer-motion";
-import { ArrowUpCircle, Monitor, Clock, Settings2, Sparkles, BarChart3, Info } from "lucide-react";
+import { ArrowUpCircle, Monitor, Clock, Settings2, Sparkles, BarChart3, Info, ToolCase } from "lucide-react";
 import appIconUrl from "../../../src-tauri/icons/32x32.png";
 import { UI_TEXT } from "../../shared/copy/uiText";
 import type { View } from "../types/view";
@@ -8,6 +8,7 @@ import type { View } from "../types/view";
 interface Props {
   currentView: View;
   onNavigate: (view: View) => void;
+  footerContent?: ReactNode;
   showUpdateEntry?: boolean;
   onOpenUpdateDialog?: () => void;
 }
@@ -18,6 +19,7 @@ const NO_DRAG_STYLE: AppRegionStyle = { WebkitAppRegion: "no-drag" };
 export default function AppSidebar({
   currentView,
   onNavigate,
+  footerContent,
   showUpdateEntry = false,
   onOpenUpdateDialog,
 }: Props) {
@@ -26,6 +28,7 @@ export default function AppSidebar({
     { id: "history" as View, icon: Clock, label: UI_TEXT.history.title },
     { id: "data" as View, icon: BarChart3, label: UI_TEXT.data.title },
     { id: "mapping" as View, icon: Sparkles, label: UI_TEXT.mapping.title },
+    { id: "tools" as View, icon: ToolCase, label: UI_TEXT.tools.title },
     { id: "settings" as View, icon: Settings2, label: UI_TEXT.settings.title },
     { id: "about" as View, icon: Info, label: UI_TEXT.about.title },
   ];
@@ -64,7 +67,8 @@ export default function AppSidebar({
         ))}
       </nav>
 
-      <div className="mt-auto flex w-full justify-center px-2">
+      <div className="mt-auto flex w-full flex-col items-center gap-2 px-2">
+        {footerContent}
         {showUpdateEntry ? (
           <motion.button
             type="button"

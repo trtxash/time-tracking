@@ -145,6 +145,14 @@ async fn table_has_columns(
         "session_title_samples" => "PRAGMA table_info(session_title_samples)",
         "settings" => "PRAGMA table_info(settings)",
         "icon_cache" => "PRAGMA table_info(icon_cache)",
+        "tool_reminders" => "PRAGMA table_info(tool_reminders)",
+        "tool_timers" => "PRAGMA table_info(tool_timers)",
+        "tool_timer_laps" => "PRAGMA table_info(tool_timer_laps)",
+        "tool_pomodoro_runs" => "PRAGMA table_info(tool_pomodoro_runs)",
+        "tool_daily_stats" => "PRAGMA table_info(tool_daily_stats)",
+        "tool_software_reminder_rules" => {
+            "PRAGMA table_info(tool_software_reminder_rules)"
+        }
         _ => {
             return Err(format!(
                 "unsupported schema inspection table `{table_name}`"
@@ -181,6 +189,14 @@ async fn table_has_index(
     let pragma = match table_name {
         "sessions" => "PRAGMA index_list(sessions)",
         "session_title_samples" => "PRAGMA index_list(session_title_samples)",
+        "tool_reminders" => "PRAGMA index_list(tool_reminders)",
+        "tool_timers" => "PRAGMA index_list(tool_timers)",
+        "tool_timer_laps" => "PRAGMA index_list(tool_timer_laps)",
+        "tool_pomodoro_runs" => "PRAGMA index_list(tool_pomodoro_runs)",
+        "tool_daily_stats" => "PRAGMA index_list(tool_daily_stats)",
+        "tool_software_reminder_rules" => {
+            "PRAGMA index_list(tool_software_reminder_rules)"
+        }
         _ => return Err(format!("unsupported index inspection table `{table_name}`")),
     };
 
@@ -449,6 +465,153 @@ async fn has_current_baseline_schema(pool: &Pool<Sqlite>) -> Result<bool, String
         && title_sample_time_index_ready)
 }
 
+async fn has_base_tools_schema(pool: &Pool<Sqlite>) -> Result<bool, String> {
+    if !table_exists(pool, "tool_reminders").await?
+        || !table_exists(pool, "tool_timers").await?
+        || !table_exists(pool, "tool_timer_laps").await?
+        || !table_exists(pool, "tool_pomodoro_runs").await?
+        || !table_exists(pool, "tool_daily_stats").await?
+    {
+        return Ok(false);
+    }
+
+    let reminders_ready = table_has_columns(
+        pool,
+        "tool_reminders",
+        &[
+            "id",
+            "label",
+            "scheduled_at",
+            "created_at",
+            "status",
+            "fired_at",
+            "cancelled_at",
+        ],
+    )
+    .await?;
+    let timers_ready = table_has_columns(
+        pool,
+        "tool_timers",
+        &[
+            "id",
+            "mode",
+            "label",
+            "duration_ms",
+            "accumulated_ms",
+            "started_at",
+            "paused_at",
+            "completed_at",
+            "status",
+            "created_at",
+            "updated_at",
+        ],
+    )
+    .await?;
+    let laps_ready = table_has_columns(
+        pool,
+        "tool_timer_laps",
+        &[
+            "id",
+            "timer_id",
+            "lap_index",
+            "started_at",
+            "ended_at",
+            "duration_ms",
+        ],
+    )
+    .await?;
+    let pomodoros_ready = table_has_columns(
+        pool,
+        "tool_pomodoro_runs",
+        &[
+            "id",
+            "phase",
+            "status",
+            "cycle_index",
+            "focus_ms",
+            "short_break_ms",
+            "long_break_ms",
+            "long_break_every",
+            "phase_started_at",
+            "phase_paused_at",
+            "phase_remaining_ms",
+            "completed_focus_count",
+            "created_at",
+            "updated_at",
+        ],
+    )
+    .await?;
+    let daily_ready = table_has_columns(
+        pool,
+        "tool_daily_stats",
+        &["date_key", "completed_pomodoros", "updated_at"],
+    )
+    .await?;
+    let reminder_index_ready =
+        table_has_index(pool, "tool_reminders", "idx_tool_reminders_schedule_status").await?;
+    let timer_index_ready =
+        table_has_index(pool, "tool_timers", "idx_tool_timers_status_updated").await?;
+    let lap_index_ready =
+        table_has_index(pool, "tool_timer_laps", "idx_tool_timer_laps_timer_id").await?;
+    let pomodoro_index_ready = table_has_index(
+        pool,
+        "tool_pomodoro_runs",
+        "idx_tool_pomodoro_runs_status_updated",
+    )
+    .await?;
+    let daily_index_ready =
+        table_has_index(pool, "tool_daily_stats", "idx_tool_daily_stats_updated").await?;
+
+    Ok(reminders_ready
+        && timers_ready
+        && laps_ready
+        && pomodoros_ready
+        && daily_ready
+        && reminder_index_ready
+        && timer_index_ready
+        && lap_index_ready
+        && pomodoro_index_ready
+        && daily_index_ready)
+}
+
+async fn has_software_reminder_rules_schema(pool: &Pool<Sqlite>) -> Result<bool, String> {
+    if !table_exists(pool, "tool_software_reminder_rules").await? {
+        return Ok(false);
+    }
+
+    let software_rules_ready = table_has_columns(
+        pool,
+        "tool_software_reminder_rules",
+        &[
+            "id",
+            "app_name",
+            "exe_name",
+            "limit_ms",
+            "message",
+            "created_at",
+            "updated_at",
+            "disabled_at",
+            "last_fired_date_key",
+        ],
+    )
+    .await?;
+    let software_rules_index_ready = table_has_index(
+        pool,
+        "tool_software_reminder_rules",
+        "idx_tool_software_reminder_rules_active",
+    )
+    .await?;
+    let sessions_app_usage_index_ready =
+        table_has_index(pool, "sessions", "idx_sessions_app_usage_time").await?;
+    let sessions_exe_usage_index_ready =
+        table_has_index(pool, "sessions", "idx_sessions_exe_usage_time").await?;
+
+    Ok(software_rules_ready
+        && software_rules_index_ready
+        && sessions_app_usage_index_ready
+        && sessions_exe_usage_index_ready)
+}
+
 async fn normalize_current_baseline_migration_history_for_pool(
     pool: &Pool<Sqlite>,
 ) -> Result<bool, String> {
@@ -460,20 +623,29 @@ async fn normalize_current_baseline_migration_history_for_pool(
         return Ok(false);
     }
 
-    let Some((version, description, checksum)) = expected_migration_metadata().into_iter().next()
-    else {
+    let mut expected = expected_migration_metadata();
+    if !has_base_tools_schema(pool).await? {
+        expected.truncate(1);
+    } else if !has_software_reminder_rules_schema(pool).await? {
+        expected.truncate(2);
+    }
+    if expected.is_empty() {
         return Ok(false);
-    };
+    }
 
     let applied_rows = sqlx::query("SELECT version, description, checksum FROM _sqlx_migrations")
         .fetch_all(pool)
         .await
         .map_err(|error| format!("failed to load applied sqlite migrations: {error}"))?;
 
-    let already_normalized = applied_rows.len() == 1
-        && applied_rows[0].get::<i64, _>("version") == version
-        && applied_rows[0].get::<String, _>("description") == description
-        && applied_rows[0].get::<Vec<u8>, _>("checksum") == checksum;
+    let already_normalized = applied_rows.len() == expected.len()
+        && expected.iter().all(|(version, description, checksum)| {
+            applied_rows.iter().any(|row| {
+                row.get::<i64, _>("version") == *version
+                    && row.get::<String, _>("description") == *description
+                    && row.get::<Vec<u8>, _>("checksum") == *checksum
+            })
+        });
 
     if already_normalized {
         return Ok(false);
@@ -486,18 +658,18 @@ async fn normalize_current_baseline_migration_history_for_pool(
         .execute(&mut *tx)
         .await
         .map_err(|error| format!("failed to clear sqlite migration history: {error}"))?;
-    sqlx::query(
-        "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time)
-         VALUES (?, ?, 1, ?, 0)",
-    )
-    .bind(version)
-    .bind(description)
-    .bind(checksum)
-    .execute(&mut *tx)
-    .await
-    .map_err(|error| {
-        format!("failed to write sqlite current baseline migration history: {error}")
-    })?;
+    for (version, description, checksum) in expected {
+        sqlx::query(
+            "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time)
+             VALUES (?, ?, 1, ?, 0)",
+        )
+        .bind(version)
+        .bind(description)
+        .bind(checksum)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| format!("failed to write sqlite current migration history: {error}"))?;
+    }
     tx.commit().await.map_err(|error| {
         format!("failed to commit sqlite migration history normalization: {error}")
     })?;
@@ -591,6 +763,32 @@ mod tests {
     }
 
     #[test]
+    fn tools_schema_creates_complete_tool_tables() {
+        tauri::async_runtime::block_on(async {
+            let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+            pool.execute(schema::TOOLS_TABLES_SCHEMA_SQL).await.unwrap();
+
+            assert!(has_base_tools_schema(&pool).await.unwrap());
+            assert!(!has_software_reminder_rules_schema(&pool).await.unwrap());
+        });
+    }
+
+    #[test]
+    fn software_reminder_schema_creates_rule_table() {
+        tauri::async_runtime::block_on(async {
+            let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+            pool.execute(schema::CURRENT_BASELINE_SCHEMA_SQL)
+                .await
+                .unwrap();
+            pool.execute(schema::SOFTWARE_REMINDER_RULES_SCHEMA_SQL)
+                .await
+                .unwrap();
+
+            assert!(has_software_reminder_rules_schema(&pool).await.unwrap());
+        });
+    }
+
+    #[test]
     fn current_schema_history_is_normalized_to_single_baseline_row() {
         tauri::async_runtime::block_on(async {
             let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
@@ -622,6 +820,89 @@ mod tests {
             assert_eq!(rows[0].get::<i64, _>("version"), expected[0].0);
             assert_eq!(rows[0].get::<String, _>("description"), expected[0].1);
             assert_eq!(rows[0].get::<Vec<u8>, _>("checksum"), expected[0].2);
+        });
+    }
+
+    #[test]
+    fn current_schema_history_preserves_tools_schema_row() {
+        tauri::async_runtime::block_on(async {
+            let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+            pool.execute(schema::CURRENT_BASELINE_SCHEMA_SQL)
+                .await
+                .unwrap();
+            pool.execute(schema::TOOLS_TABLES_SCHEMA_SQL).await.unwrap();
+            create_sqlx_migrations_table(&pool).await;
+            pool.execute(
+                "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time)
+                 VALUES (1, 'old_v1', 1, x'01', 0),
+                        (2, 'old_v2', 1, x'02', 0)",
+            )
+            .await
+            .unwrap();
+
+            let normalized = normalize_current_baseline_migration_history_for_pool(&pool)
+                .await
+                .unwrap();
+
+            assert!(normalized);
+            let rows = sqlx::query("SELECT version, description, checksum FROM _sqlx_migrations")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+            let mut expected = expected_migration_metadata();
+            expected.truncate(2);
+
+            assert_eq!(rows.len(), expected.len());
+            for (version, description, checksum) in expected {
+                assert!(rows.iter().any(|row| {
+                    row.get::<i64, _>("version") == version
+                        && row.get::<String, _>("description") == description
+                        && row.get::<Vec<u8>, _>("checksum") == checksum
+                }));
+            }
+        });
+    }
+
+    #[test]
+    fn current_schema_history_preserves_software_reminder_schema_row() {
+        tauri::async_runtime::block_on(async {
+            let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+            pool.execute(schema::CURRENT_BASELINE_SCHEMA_SQL)
+                .await
+                .unwrap();
+            pool.execute(schema::TOOLS_TABLES_SCHEMA_SQL).await.unwrap();
+            pool.execute(schema::SOFTWARE_REMINDER_RULES_SCHEMA_SQL)
+                .await
+                .unwrap();
+            create_sqlx_migrations_table(&pool).await;
+            pool.execute(
+                "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time)
+                 VALUES (1, 'old_v1', 1, x'01', 0),
+                        (2, 'old_v2', 1, x'02', 0),
+                        (3, 'old_v3', 1, x'03', 0)",
+            )
+            .await
+            .unwrap();
+
+            let normalized = normalize_current_baseline_migration_history_for_pool(&pool)
+                .await
+                .unwrap();
+
+            assert!(normalized);
+            let rows = sqlx::query("SELECT version, description, checksum FROM _sqlx_migrations")
+                .fetch_all(&pool)
+                .await
+                .unwrap();
+            let expected = expected_migration_metadata();
+
+            assert_eq!(rows.len(), expected.len());
+            for (version, description, checksum) in expected {
+                assert!(rows.iter().any(|row| {
+                    row.get::<i64, _>("version") == version
+                        && row.get::<String, _>("description") == description
+                        && row.get::<Vec<u8>, _>("checksum") == checksum
+                }));
+            }
         });
     }
 

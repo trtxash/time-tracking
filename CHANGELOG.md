@@ -18,11 +18,11 @@ App note en: TBD.
 
 ### Added
 
-- 暂无。
+- 新增 `Tools / 工具` 页面，提供提醒、正/倒计时和番茄钟三个轻量主动时间工具；工具状态可通过侧边栏低噪音入口返回。Refs [#14](https://github.com/Ceceliaee/time-tracking/issues/14)
 
 ### Changed
 
-- 暂无。
+- 工具到期提醒改为用户主动启动后的固定反馈；设置页和全局设置 schema 不再承载工具偏好，具体工具时长与操作留在 Tools 页面。
 
 ### Fixed
 
@@ -34,7 +34,7 @@ App note en: TBD.
 
 ### Internal
 
-- 暂无。
+- 新增工具页 SQLite 表、Rust runtime/IPC、前端 runtime gateway、备份恢复覆盖和 Tools smoke 验证，并将首包 bundle 预算校准到新入口后的实际范围。
 
 ## [1.4.3] - 2026-06-07
 

@@ -38,7 +38,7 @@
 
 - `Tauri` 桌面应用
 - 时间追踪与工作陪伴型工具
-- 以 `Dashboard / History / Data / App Mapping / Settings / About` 为核心工作面的产品
+- 以 `Dashboard / History / Data / App Mapping / Tools / Settings / About` 为核心工作面的产品
 - 以更新状态、备份恢复、桌面挂件等能力作为低噪音支持面的产品
 
 因此 UI 默认应更接近：

@@ -54,6 +54,9 @@ import {
   createPreloadableViewComponent,
 } from "./services/viewChunkPreloadService";
 import { watchCurrentWindowForegroundState, watchCurrentWindowMaximized } from "../platform/desktop/windowControlGateway";
+import ToolsSidebarStatusEntry from "../features/tools/components/ToolsSidebarStatusEntry.tsx";
+import ToolAlertDialog from "../features/tools/components/ToolAlertDialog.tsx";
+import type { ToolsOpenTarget } from "../features/tools/types.ts";
 
 const DATA_FOREGROUND_PREWARM_DELAY_MS = 1_200;
 const BACKGROUND_CACHE_RELEASE_DELAY_MS = LONG_BACKGROUND_DELAY_MS;
@@ -63,6 +66,7 @@ const Data = createPreloadableViewComponent("data");
 const Settings = createPreloadableViewComponent("settings");
 const About = createPreloadableViewComponent("about");
 const AppMapping = createPreloadableViewComponent("mapping");
+const Tools = createPreloadableViewComponent("tools");
 
 type HistoryDateRequest = {
   dateKey: string;
@@ -124,6 +128,7 @@ function AppShellContent() {
   ));
   const [isWindowForegroundLike, setIsWindowForegroundLike] = useState(true);
   const [historyDateRequest, setHistoryDateRequest] = useState<HistoryDateRequest | null>(null);
+  const [toolsInitialTarget, setToolsInitialTarget] = useState<ToolsOpenTarget>({ section: "reminders" });
   const backgroundEnteredAtMsRef = useRef<number | null>(null);
   const wasForegroundReadyRef = useRef<boolean | null>(null);
   const warmupRuntimeReadyResolveRef = useRef<(() => void) | null>(null);
@@ -183,6 +188,11 @@ function AppShellContent() {
     && trackingStatus.isTrackingActive
     ? mappedActiveApp
     : null;
+  const handleToolsStatusChipOpen = useCallback((target: ToolsOpenTarget) => {
+    setHistoryDateRequest(null);
+    setToolsInitialTarget(target);
+    void handleNavigate("tools");
+  }, [handleNavigate]);
 
   useEffect(() => {
     const controller = startStartupWarmup({
@@ -389,10 +399,12 @@ function AppShellContent() {
 
       <div className="qp-shell flex-1 min-h-0 p-4 md:p-5 lg:p-6 flex gap-4 md:gap-5 lg:gap-6 overflow-hidden">
         <QuietToastStack toasts={toasts} />
+        <ToolAlertDialog />
         {dialogs}
         <AppSidebar
           currentView={currentView}
           onNavigate={handleSidebarNavigate}
+          footerContent={<ToolsSidebarStatusEntry onOpenSection={handleToolsStatusChipOpen} />}
           {...sidebarUpdateEntry}
         />
 
@@ -445,6 +457,14 @@ function AppShellContent() {
                   mappingVersion={mappingVersion}
                   onOpenHistoryDate={openHistoryForDate}
                   uiLanguage={uiTextLanguage}
+                />
+              )}
+              {currentView === "tools" && (
+                <Tools
+                  key="tools"
+                  initialTarget={toolsInitialTarget}
+                  icons={icons}
+                  onToast={pushToast}
                 />
               )}
               {currentView === "settings" && (

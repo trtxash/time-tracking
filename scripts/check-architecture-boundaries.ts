@@ -92,6 +92,10 @@ function isAppComponentOrHook(path: string) {
   return /^src\/app\/(components|hooks)\//.test(path);
 }
 
+function isAppComponent(path: string) {
+  return /^src\/app\/components\//.test(path);
+}
+
 function findArchitectureViolations(files: SourceFile[]): ArchitectureViolation[] {
   const violations: ArchitectureViolation[] = [];
 
@@ -144,6 +148,15 @@ function findArchitectureViolations(files: SourceFile[]): ArchitectureViolation[
             path: file.path,
             line: index + 1,
             rule: "app-shell-no-direct-persistence-import",
+            text: lineText.trim(),
+          });
+        }
+
+        if (isAppComponent(file.path) && /^src\/features\//.test(importedPath)) {
+          violations.push({
+            path: file.path,
+            line: index + 1,
+            rule: "app-component-no-feature-import",
             text: lineText.trim(),
           });
         }
@@ -262,6 +275,10 @@ function runSelfTest() {
       content: "import { getSessionsInRange } from '../../platform/persistence/sessionReadRepository.ts';",
     },
     {
+      path: "src/app/components/AppSidebar.tsx",
+      content: "import ToolsStatusChip from '../../features/tools/components/ToolsStatusChip.tsx';",
+    },
+    {
       path: "src/platform/persistence/sessionReadRepository.ts",
       content: "import { loadDashboardSnapshot } from '../../features/dashboard/services/dashboardReadModel.ts';",
     },
@@ -274,6 +291,7 @@ function runSelfTest() {
   const rules = violations.map((violation) => violation.rule).sort();
   const expectedRules = [
     "app-shell-no-direct-persistence-import",
+    "app-component-no-feature-import",
     "feature-ui-no-direct-invoke",
     "feature-ui-no-platform-import",
     "platform-no-feature-import",
@@ -305,7 +323,7 @@ function main() {
     return;
   }
 
-  console.error("Architecture boundary check failed. Feature UI and hooks must not bypass owned services.");
+  console.error("Architecture boundary check failed. UI, shell, and platform code must stay within owned boundaries.");
   for (const violation of violations) {
     console.error(`${violation.path}:${violation.line} ${violation.rule} -> ${violation.text}`);
   }

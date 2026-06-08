@@ -8,6 +8,7 @@ use crate::app::{
     tray,
 };
 use crate::engine::{
+    tools::ToolsRuntimeState,
     tracking::{runtime_snapshot::TrackingRuntimeSnapshotState, watchdog::RuntimeHealthState},
     updater::UpdaterRuntimeState,
 };
@@ -51,6 +52,7 @@ fn register_managed_state_and_plugins(
         .manage(MainWindowLifecycleState::default())
         .manage(WidgetWindowLifecycleState::default())
         .manage(TrackingRuntimeSnapshotState::default())
+        .manage(ToolsRuntimeState::default())
         .manage(crate::platform::local_api::LocalApiRuntimeState::default())
         .manage(UpdaterRuntimeState::new(app_version.to_string()))
         .plugin(
@@ -67,6 +69,7 @@ fn register_managed_state_and_plugins(
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
 }
 
@@ -81,6 +84,23 @@ fn register_invoke_handlers(builder: tauri::Builder<tauri::Wry>) -> tauri::Build
         commands::settings::cmd_set_background_optimization,
         commands::settings::cmd_commit_app_settings,
         commands::settings::cmd_commit_classification_settings,
+        commands::tools::cmd_get_tools_snapshot,
+        commands::tools::cmd_get_tool_alerts,
+        commands::tools::cmd_dismiss_tool_alert,
+        commands::tools::cmd_create_reminder,
+        commands::tools::cmd_cancel_reminder,
+        commands::tools::cmd_create_software_reminder_rule,
+        commands::tools::cmd_disable_software_reminder_rule,
+        commands::tools::cmd_start_timer,
+        commands::tools::cmd_pause_timer,
+        commands::tools::cmd_resume_timer,
+        commands::tools::cmd_reset_timer,
+        commands::tools::cmd_add_timer_lap,
+        commands::tools::cmd_start_pomodoro,
+        commands::tools::cmd_pause_pomodoro,
+        commands::tools::cmd_resume_pomodoro,
+        commands::tools::cmd_skip_pomodoro_phase,
+        commands::tools::cmd_reset_pomodoro,
         commands::widget::cmd_get_widget_icon_map,
         commands::widget::cmd_get_widget_icon,
         commands::widget::cmd_get_widget_placement,

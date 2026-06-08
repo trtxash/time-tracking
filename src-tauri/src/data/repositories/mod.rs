@@ -4,6 +4,7 @@ pub mod icon_cache;
 pub mod session_title_samples;
 pub mod sessions;
 pub mod settings;
+pub mod tools;
 pub mod tracker_settings;
 pub mod update_state;
 pub mod widget_state;

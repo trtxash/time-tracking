@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 interface Props {
   icon: ReactNode;
   title: string;
+  titleSuffix?: ReactNode;
   subtitle?: ReactNode;
   rightSlot?: ReactNode;
 }
@@ -10,6 +11,7 @@ interface Props {
 export default function QuietPageHeader({
   icon,
   title,
+  titleSuffix,
   subtitle,
   rightSlot,
 }: Props) {
@@ -20,7 +22,10 @@ export default function QuietPageHeader({
           {icon}
         </div>
         <div className="qp-page-header-copy">
-          <h1 className="qp-page-header-title">{title}</h1>
+          <div className="qp-page-header-title-row">
+            <h1 className="qp-page-header-title">{title}</h1>
+            {titleSuffix ? titleSuffix : null}
+          </div>
           {subtitle ? (
             <div className="qp-page-header-subtitle">
               {subtitle}

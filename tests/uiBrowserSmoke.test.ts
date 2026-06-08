@@ -6,8 +6,9 @@ import { join } from "node:path";
 import { createServer, type Plugin } from "vite";
 import { COPY } from "../src/shared/copy/uiText.ts";
 
-const EXPECTED_NAV_LABELS = ["今天", "历史", "数据", "应用", "设置", "关于"] as const;
+const EXPECTED_NAV_LABELS = ["今天", "历史", "数据", "应用", "工具", "设置", "关于"] as const;
 const DASHBOARD_MARKERS = ["专注分布", "应用排行"] as const;
+const TOOLS_TEXT = COPY["zh-CN"].tools;
 const SETTINGS_MARKER = "主题模式";
 const APP_LOADING_VIEW = COPY["zh-CN"].app.loadingView;
 const HISTORY_LOADING_VIEW = COPY["zh-CN"].history.loading;
@@ -621,6 +622,140 @@ try {
         `document.querySelector('[aria-label=' + ${jsonString(JSON.stringify(label))} + ']')?.className.includes("qp-nav-item-active")`,
       );
     }
+  });
+
+  await runTest("Tools page renders its tool sections", async () => {
+    assert.equal(
+      await evaluate(client!, sessionId, `
+        (() => {
+          const node = document.querySelector('[aria-label=' + ${jsonString(JSON.stringify("工具"))} + ']');
+          if (!node) return false;
+          node.click();
+          return true;
+        })()
+      `),
+      true,
+    );
+    await waitForExpression(
+      client!,
+      sessionId,
+      `document.body.innerText.includes(${jsonString(TOOLS_TEXT.subtitle)})`,
+    );
+    await waitForExpression(
+      client!,
+      sessionId,
+      `document.body.innerText.includes(${jsonString(TOOLS_TEXT.reminderEmpty)})`,
+    );
+
+    for (const marker of [
+      TOOLS_TEXT.remindersTitle,
+      TOOLS_TEXT.timerTitle,
+      TOOLS_TEXT.pomodoroTitle,
+    ] as const) {
+      assert.equal(
+        await evaluate(client!, sessionId, `
+          Boolean(document.querySelector('[aria-label=' + ${jsonString(JSON.stringify(marker))} + ']'))
+        `),
+        true,
+        `missing Tools section ${marker}`,
+      );
+    }
+
+    assert.equal(
+      await evaluate(client!, sessionId, "document.querySelectorAll('.tools-section-tab-copy').length"),
+      0,
+      "Tools section rail should stay icon-only",
+    );
+    assert.equal(
+      await evaluate(client!, sessionId, "Boolean(document.querySelector('.tools-section-label-toggle'))"),
+      false,
+      "Tools section rail should not expose a label toggle",
+    );
+    assert.equal(
+      await evaluate(client!, sessionId, `
+        (() => {
+          const workspace = document.querySelector('.tools-workspace');
+          if (!workspace) return false;
+          const railWidth = parseFloat(getComputedStyle(workspace).gridTemplateColumns.split(' ')[0] ?? "0");
+          return railWidth > 0 && railWidth <= 80;
+        })()
+      `),
+      true,
+    );
+
+    for (const marker of [
+      TOOLS_TEXT.remindersTitle,
+      TOOLS_TEXT.reminderModeEvent,
+      TOOLS_TEXT.reminderModeSoftware,
+    ] as const) {
+      assert.equal(
+        await evaluate(client!, sessionId, `document.body.innerText.includes(${jsonString(marker)})`),
+        true,
+        `missing visible Tools panel marker ${marker}`,
+      );
+    }
+
+    assert.equal(
+      await evaluate(client!, sessionId, `
+        (() => {
+          const software = Array.from(document.querySelectorAll('button'))
+            .find((node) => node.textContent?.trim() === ${jsonString(TOOLS_TEXT.reminderModeSoftware)});
+          if (!software) return false;
+          software.click();
+          return true;
+        })()
+      `),
+      true,
+    );
+    await waitForExpression(
+      client!,
+      sessionId,
+      `document.body.innerText.includes(${jsonString(TOOLS_TEXT.softwareReminderSummaryLabel)})`,
+    );
+    await waitForExpression(
+      client!,
+      sessionId,
+      `document.body.innerText.includes(${jsonString(TOOLS_TEXT.softwareReminderEmpty)})`,
+    );
+
+    assert.equal(
+      await evaluate(client!, sessionId, `
+        (() => {
+          const timer = document.querySelector('[aria-label=' + ${jsonString(JSON.stringify(TOOLS_TEXT.timerTitle))} + ']');
+          if (!timer) return false;
+          timer.click();
+          return true;
+        })()
+      `),
+      true,
+    );
+    await waitForExpression(
+      client!,
+      sessionId,
+      `document.body.innerText.includes(${jsonString(TOOLS_TEXT.timerModeStopwatch)})`,
+    );
+
+    assert.equal(
+      await evaluate(client!, sessionId, `
+        (() => {
+          const pomodoro = document.querySelector('[aria-label=' + ${jsonString(JSON.stringify(TOOLS_TEXT.pomodoroTitle))} + ']');
+          if (!pomodoro) return false;
+          pomodoro.click();
+          return true;
+        })()
+      `),
+      true,
+    );
+    await waitForExpression(
+      client!,
+      sessionId,
+      `document.body.innerText.includes(${jsonString(TOOLS_TEXT.pomodoroTitle)})`,
+    );
+    assert.equal(
+      await evaluate(client!, sessionId, "document.querySelectorAll('.tools-section-tab-copy').length"),
+      0,
+      "Tools section rail should stay icon-only after switching sections",
+    );
   });
 
   await runTest("warm primary navigation avoids app loading after startup warmup", async () => {

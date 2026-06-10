@@ -20,13 +20,13 @@
     {
       "identifier": "sql:allow-load",
       "args": {
-        "db": "sqlite:timetracker.db"
+        "db": "sqlite:patina.db"
       }
     },
     {
       "identifier": "sql:allow-select",
       "args": {
-        "db": "sqlite:timetracker.db"
+        "db": "sqlite:patina.db"
       }
     }
   ]

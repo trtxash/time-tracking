@@ -221,6 +221,10 @@ function tauriStubFor(path: string) {
       }
 
       export default class Database {
+        static get() {
+          return new Database();
+        }
+
         static async load() {
           return new Database();
         }

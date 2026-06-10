@@ -1,5 +1,6 @@
 use crate::app::state::{DesktopBehaviorState, MainWindowLifecycleState};
 use crate::app::widget;
+use crate::platform::app_paths;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Window};
 
@@ -45,7 +46,16 @@ pub(crate) fn hide_main_window_for_background<R: Runtime + 'static>(
     }
 }
 
-fn ensure_main_window<R: Runtime>(app: &AppHandle<R>) -> Result<WebviewWindow<R>, String> {
+pub(crate) fn ensure_main_window<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<WebviewWindow<R>, String> {
+    ensure_main_window_with_initial_visibility(app, true)
+}
+
+pub(crate) fn ensure_main_window_with_initial_visibility<R: Runtime>(
+    app: &AppHandle<R>,
+    visible: bool,
+) -> Result<WebviewWindow<R>, String> {
     if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
         return Ok(window);
     }
@@ -58,6 +68,8 @@ fn ensure_main_window<R: Runtime>(app: &AppHandle<R>) -> Result<WebviewWindow<R>
         .decorations(false)
         .transparent(true)
         .center()
+        .visible(visible)
+        .data_directory(app_paths::product_webview_data_dir(app)?)
         .build()
         .map_err(|error| format!("failed to create main window: {error}"))
 }

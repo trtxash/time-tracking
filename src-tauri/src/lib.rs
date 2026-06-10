@@ -22,13 +22,6 @@ pub fn run() {
     let runtime_health = Arc::new(engine::tracking::watchdog::RuntimeHealthState::default());
     let launched_by_autostart = app::runtime::was_launched_by_autostart();
     let app_version = context.package_info().version.to_string();
-    let app_identifier = context.config().identifier.clone();
-
-    if let Err(error) = tauri::async_runtime::block_on(
-        data::sqlite_pool::normalize_current_baseline_migration_history(&app_identifier),
-    ) {
-        eprintln!("[sql] failed to normalize current baseline migration history: {error}");
-    }
 
     app::bootstrap::build(app::bootstrap::BootstrapInput {
         runtime_health,

@@ -1,4 +1,5 @@
 use crate::app::desktop_behavior;
+use crate::app::main_window;
 use crate::app::runtime_tasks;
 use crate::app::state::DesktopBehaviorState;
 use crate::app::tray::{apply_tray_visibility, setup_tray, MAIN_WINDOW_LABEL};
@@ -57,6 +58,11 @@ pub fn setup(
     crate::app::local_api::start(app.handle().clone());
 
     let app_handle = app.handle().clone();
+    main_window::ensure_main_window_with_initial_visibility(&app_handle, !launched_by_autostart)
+        .map_err(std::io::Error::other)?;
+    if let Err(error) = crate::data::sqlite_pool::cleanup_webview_compat_dirs(&app_handle) {
+        eprintln!("[webview] failed to cleanup WebView compat dirs: {error}");
+    }
     setup_tray(&app_handle)?;
     let desktop_behavior = app_handle.state::<DesktopBehaviorState>().snapshot();
     apply_tray_visibility(&app_handle, desktop_behavior);

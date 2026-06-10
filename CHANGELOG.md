@@ -36,6 +36,35 @@ App note en: TBD.
 
 - 暂无。
 
+## [1.5.2] - 2026-06-10
+
+Release: 将底层应用身份与本地数据目录迁移到 Patina。
+App note: 本地数据会自动迁移到 Patina 目录。
+App note en: Local data now migrates automatically to Patina folders.
+
+### Added
+
+- 暂无。
+
+### Changed
+
+- 底层应用身份与用户可见数据目录统一迁移到 Patina；新数据写入 `%APPDATA%\Patina`，数据库文件名改为 `patina.db`。
+- WebView2 数据根目录改为 `%LOCALAPPDATA%\Patina`，实际运行缓存为 `%LOCALAPPDATA%\Patina\EBWebView`，避免继续生成反向域名命名的用户可见目录。
+- 旧 `Time Tracker` 本地备份格式和旧 WebDAV 远程备份入口在迁移窗口内继续兼容；恢复后会按 Patina 身份继续保存。
+
+### Fixed
+
+- 从旧 `%APPDATA%\com.timetracker\timetracker.db` 自动迁移到 `%APPDATA%\Patina\patina.db`，迁移成功并验证通过后会清理已知旧数据文件和旧 WebView cache。
+- 旧 WebDAV 凭据会在读取成功后迁移到新的 Patina 凭据目标，避免远程备份设置在升级后丢失。
+
+### Removed
+
+- 暂无。
+
+### Internal
+
+- 为 D+10 清理版本保留旧身份兼容代码的退出边界；迁移窗口结束后将移除旧身份、旧数据库名、旧备份 identity 和旧 credential target 的兼容入口。
+
 ## [1.5.1] - 2026-06-10
 
 Release: 修复更名后旧 Time Tracker 自启动仍可能启动 1.4.3 的问题。

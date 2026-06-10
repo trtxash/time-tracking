@@ -107,6 +107,10 @@ function tauriStubFor(path: string) {
 
   if (path === "@tauri-apps/plugin-sql") {
     return class Database {
+      static get() {
+        return new Database();
+      }
+
       static async load() {
         return new Database();
       }

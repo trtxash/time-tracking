@@ -1,4 +1,5 @@
 import Database from "@tauri-apps/plugin-sql";
+import { invoke } from "@tauri-apps/api/core";
 import {
   createSerializedJobRunner,
   executeWriteBatchWithExecutor,
@@ -6,7 +7,7 @@ import {
   type SqlWriteOperation,
 } from "./sqliteTransactions.ts";
 
-const DB_URL = "sqlite:timetracker.db";
+const DB_URL = "sqlite:patina.db";
 
 // Low-level DB adapter only.
 // Read-model queries should live in shared read repositories.
@@ -21,15 +22,10 @@ export const getDB = async () => {
     }
 
     if (!dbInstancePromise) {
-      dbInstancePromise = Database.load(DB_URL)
-        .then((db) => {
-          dbInstance = db;
-          return db;
-        })
-        .catch((error) => {
-          dbInstancePromise = null;
-          throw error;
-        });
+      dbInstancePromise = Promise.resolve(Database.get(DB_URL)).then((db) => {
+        dbInstance = db;
+        return db;
+      });
     }
 
     return await dbInstancePromise;
@@ -44,18 +40,9 @@ export const getDB = async () => {
 export type { SqlWriteOperation } from "./sqliteTransactions.ts";
 
 async function resetDBConnectionPool(): Promise<void> {
-  const db = dbInstance;
   dbInstance = null;
   dbInstancePromise = null;
-  if (!db) {
-    return;
-  }
-
-  try {
-    await db.close(db.path);
-  } catch (error) {
-    console.warn("Database pool close failed while recovering write connection", error);
-  }
+  await invoke("cmd_reopen_sqlite_pool");
 }
 
 async function withRecoverableWriteRetry(job: () => Promise<void>): Promise<void> {

@@ -60,14 +60,7 @@ fn register_managed_state_and_plugins(
                 .args(vec![runtime::AUTOSTART_ARG.to_string()])
                 .build(),
         )
-        .plugin(
-            tauri_plugin_sql::Builder::default()
-                .add_migrations(
-                    data::sqlite_pool::SQLITE_DB_NAME,
-                    data::schema::tracker_migrations(),
-                )
-                .build(),
-        )
+        .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -129,6 +122,7 @@ fn register_invoke_handlers(builder: tauri::Builder<tauri::Wry>) -> tauri::Build
         commands::backup::cmd_upload_webdav_backup,
         commands::backup::cmd_list_webdav_backups,
         commands::backup::cmd_download_webdav_backup,
+        commands::persistence::cmd_reopen_sqlite_pool,
         commands::diagnostics::cmd_get_resource_diagnostics
     ])
 }
@@ -143,6 +137,8 @@ fn register_runtime_hooks(
         .on_tray_icon_event(tray::handle_tray_icon_event)
         .on_window_event(tray::handle_window_event)
         .setup(move |app| {
+            tauri::async_runtime::block_on(data::sqlite_pool::initialize_app_sqlite(app.handle()))
+                .map_err(std::io::Error::other)?;
             Ok(runtime::setup(
                 app,
                 runtime_health.clone(),

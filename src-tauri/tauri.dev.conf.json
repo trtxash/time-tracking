@@ -2,8 +2,8 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Patina Dev",
   "mainBinaryName": "PatinaDev",
-  "version": "1.5.1",
-  "identifier": "com.timetracker.dev",
+  "version": "1.5.2",
+  "identifier": "com.ceceliaee.patina.dev",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:1420",
@@ -11,20 +11,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "Patina Dev",
-        "width": 1100,
-        "height": 736,
-        "minWidth": 900,
-        "minHeight": 636,
-        "resizable": true,
-        "decorations": false,
-        "transparent": true,
-        "center": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }
@@ -42,11 +29,6 @@
     ]
   },
   "plugins": {
-    "sql": {
-      "preload": [
-        "sqlite:timetracker.db"
-      ]
-    },
     "updater": {
       "active": true,
       "dialog": false,

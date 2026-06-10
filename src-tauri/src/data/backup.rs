@@ -4,6 +4,7 @@ use crate::domain::backup::{
     BackupIconCache, BackupMeta, BackupPayload, BackupPreview, BackupSession, BackupSetting,
     BackupTitleSample, CURRENT_BACKUP_SCHEMA_VERSION, CURRENT_BACKUP_VERSION,
 };
+use crate::platform::app_paths;
 use crc32fast::Hasher;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
@@ -11,11 +12,13 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Runtime};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 const BACKUP_FILE_EXT: &str = "zip";
+const BACKUP_FORMAT: &str = "PatinaBackup";
+const LEGACY_BACKUP_FORMAT: &str = "TimeTrackerBackup";
 const BACKUP_MANIFEST_ENTRY_NAME: &str = "manifest.json";
 const BACKUP_CHECKSUMS_ENTRY_NAME: &str = "checksums.json";
 const BACKUP_SESSIONS_ENTRY_NAME: &str = "data/sessions.json";
@@ -84,11 +87,7 @@ struct BackupArchiveChecksums {
 }
 
 fn default_backup_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    let app_data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| format!("failed to resolve app data dir: {error}"))?;
-    let backup_dir = app_data_dir.join("backups");
+    let backup_dir = app_paths::product_roaming_data_dir(app)?.join("backups");
     fs::create_dir_all(&backup_dir)
         .map_err(|error| format!("failed to create backup dir: {error}"))?;
 
@@ -225,7 +224,7 @@ pub enum RestoreStrategy {
 
 fn build_backup_manifest(payload: &BackupPayload) -> BackupArchiveManifest {
     BackupArchiveManifest {
-        format: "TimeTrackerBackup".to_string(),
+        format: BACKUP_FORMAT.to_string(),
         backup_version: payload.version,
         exported_at_ms: payload.meta.exported_at_ms,
         schema_version: payload.meta.schema_version,
@@ -519,6 +518,13 @@ fn decode_structured_backup_archive(
     let checksums =
         parse_json::<BackupArchiveChecksums>(&checksums_json, backup_path, "checksums")?;
     let manifest = parse_json::<BackupArchiveManifest>(&manifest_json, backup_path, "manifest")?;
+    if manifest.format != BACKUP_FORMAT && manifest.format != LEGACY_BACKUP_FORMAT {
+        return Err(format!(
+            "backup archive `{}` has unsupported format `{}`",
+            backup_path.display(),
+            manifest.format
+        ));
+    }
     let title_samples_json = if backup_archive_declares_title_samples(&manifest, &checksums) {
         Some(read_zip_entry(
             archive,
@@ -846,6 +852,14 @@ mod tests {
         let archive = encode_backup_archive(&payload).unwrap();
         let mut zip = ZipArchive::new(Cursor::new(archive)).unwrap();
         assert!(zip.by_name(BACKUP_MANIFEST_ENTRY_NAME).is_ok());
+        let mut manifest_json = String::new();
+        zip.by_name(BACKUP_MANIFEST_ENTRY_NAME)
+            .unwrap()
+            .read_to_string(&mut manifest_json)
+            .unwrap();
+        let manifest: BackupArchiveManifest =
+            serde_json::from_str(&manifest_json).expect("manifest json");
+        assert_eq!(manifest.format, BACKUP_FORMAT);
         assert!(zip.by_name(BACKUP_SESSIONS_ENTRY_NAME).is_ok());
         assert!(zip.by_name(BACKUP_TITLE_SAMPLES_ENTRY_NAME).is_ok());
         assert!(zip.by_name(BACKUP_SETTINGS_ENTRY_NAME).is_ok());

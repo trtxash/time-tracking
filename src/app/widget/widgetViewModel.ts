@@ -35,7 +35,7 @@ const WIDGET_SELF_EXECUTABLES = new Set([
 
 const WIDGET_SELF_WINDOW_TITLES = new Set([
   "Patina Widget",
-  "Time Tracker Widget",
+  "Patina Widget",
   "Time Tracking",
 ]);
 

@@ -1,5 +1,6 @@
 use crate::data::backup;
 use crate::domain::backup::BackupPreview;
+use crate::platform::app_paths;
 use crate::platform::credentials;
 use crate::platform::webdav::{normalize_remote_dir, WebDavClient, WebDavConfig};
 use chrono::Local;
@@ -7,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 const INDEX_FILE_NAME: &str = "backup-index.json";
 const INDEX_VERSION: u32 = 1;
@@ -207,11 +208,7 @@ async fn save_index(
 }
 
 fn temp_backup_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|error| format!("failed to resolve app data dir: {error}"))?
-        .join("remote-backup-temp");
+    let dir = app_paths::product_roaming_data_dir(app)?.join("remote-backup-temp");
     fs::create_dir_all(&dir)
         .map_err(|error| format!("failed to create temp backup dir: {error}"))?;
     Ok(dir)

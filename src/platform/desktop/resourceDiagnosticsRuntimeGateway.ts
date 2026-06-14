@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 interface RawWindowsProcessResourceSnapshot {
   handle_count: number;
   thread_count: number;
+  working_set_bytes: number;
+  private_usage_bytes: number;
 }
 
 interface RawProcessDetailsCacheStats {
@@ -31,6 +33,8 @@ export interface ResourceDiagnosticsSnapshot {
   processResources: {
     handleCount: number;
     threadCount: number;
+    workingSetBytes: number;
+    privateUsageBytes: number;
   };
   processDetailsCache: {
     entries: number;
@@ -64,7 +68,10 @@ function isRawProcessResources(value: unknown): value is RawWindowsProcessResour
   }
 
   const record = value as Record<string, unknown>;
-  return isNumber(record.handle_count) && isNumber(record.thread_count);
+  return isNumber(record.handle_count)
+    && isNumber(record.thread_count)
+    && isNumber(record.working_set_bytes)
+    && isNumber(record.private_usage_bytes);
 }
 
 function isRawCacheStats(value: unknown): value is RawProcessDetailsCacheStats {
@@ -106,6 +113,8 @@ function mapRawResourceDiagnostics(raw: RawResourceDiagnosticsSnapshot): Resourc
     processResources: {
       handleCount: raw.process_resources.handle_count,
       threadCount: raw.process_resources.thread_count,
+      workingSetBytes: raw.process_resources.working_set_bytes,
+      privateUsageBytes: raw.process_resources.private_usage_bytes,
     },
     processDetailsCache: mapRawCacheStats(raw.process_details_cache),
     iconResultCache: mapRawCacheStats(raw.icon_result_cache),

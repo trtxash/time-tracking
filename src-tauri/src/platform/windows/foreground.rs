@@ -39,6 +39,7 @@ pub struct WindowInfo {
 static AFK_THRESHOLD_SECS: AtomicU64 = AtomicU64::new(180);
 const PROCESS_DETAILS_CACHE_TTL_MS: u64 = 10_000;
 const PROCESS_DETAILS_NEGATIVE_CACHE_TTL_MS: u64 = 1_000;
+const PROCESS_DETAILS_CACHE_MAX_ENTRIES: usize = 128;
 
 #[derive(Clone, Debug)]
 struct ProcessDetailsCacheEntry {
@@ -53,6 +54,7 @@ pub struct ProcessDetailsCacheStats {
     pub entries: usize,
     pub positive_entries: usize,
     pub negative_entries: usize,
+    pub max_entries: usize,
     pub ttl_ms: u64,
     pub negative_ttl_ms: u64,
 }
@@ -355,23 +357,30 @@ unsafe fn get_process_name_from_snapshot(process_id: u32) -> Option<String> {
 }
 
 fn read_cached_process_details(process_id: u32, now_ms: u64) -> Option<ProcessDetailsCacheEntry> {
-    let cache = process_details_cache().lock().ok()?;
+    let mut cache = process_details_cache().lock().ok()?;
     let entry = cache.get(&process_id)?;
-    let ttl_ms = if entry.is_negative {
-        PROCESS_DETAILS_NEGATIVE_CACHE_TTL_MS
-    } else {
-        PROCESS_DETAILS_CACHE_TTL_MS
-    };
 
-    if now_ms.saturating_sub(entry.cached_at_ms) <= ttl_ms {
+    if is_process_details_cache_entry_fresh(entry, now_ms) {
         Some(entry.clone())
     } else {
+        cache.remove(&process_id);
         None
     }
 }
 
 fn write_cached_process_details(process_id: u32, details: &(String, String), now_ms: u64) {
     if let Ok(mut cache) = process_details_cache().lock() {
+        prune_expired_process_details_cache(&mut cache, now_ms);
+        if cache.len() >= PROCESS_DETAILS_CACHE_MAX_ENTRIES && !cache.contains_key(&process_id) {
+            if let Some(oldest_process_id) = cache
+                .iter()
+                .min_by_key(|(_, entry)| entry.cached_at_ms)
+                .map(|(cached_process_id, _)| *cached_process_id)
+            {
+                cache.remove(&oldest_process_id);
+            }
+        }
+
         cache.insert(
             process_id,
             ProcessDetailsCacheEntry {
@@ -384,6 +393,23 @@ fn write_cached_process_details(process_id: u32, details: &(String, String), now
     }
 }
 
+fn is_process_details_cache_entry_fresh(entry: &ProcessDetailsCacheEntry, now_ms: u64) -> bool {
+    let ttl_ms = if entry.is_negative {
+        PROCESS_DETAILS_NEGATIVE_CACHE_TTL_MS
+    } else {
+        PROCESS_DETAILS_CACHE_TTL_MS
+    };
+
+    now_ms.saturating_sub(entry.cached_at_ms) <= ttl_ms
+}
+
+fn prune_expired_process_details_cache(
+    cache: &mut HashMap<u32, ProcessDetailsCacheEntry>,
+    now_ms: u64,
+) {
+    cache.retain(|_, entry| is_process_details_cache_entry_fresh(entry, now_ms));
+}
+
 fn process_details_cache() -> &'static Mutex<HashMap<u32, ProcessDetailsCacheEntry>> {
     static PROCESS_DETAILS_CACHE: OnceLock<Mutex<HashMap<u32, ProcessDetailsCacheEntry>>> =
         OnceLock::new();
@@ -393,7 +419,8 @@ fn process_details_cache() -> &'static Mutex<HashMap<u32, ProcessDetailsCacheEnt
 pub fn process_details_cache_stats() -> ProcessDetailsCacheStats {
     let (entries, positive_entries, negative_entries) = process_details_cache()
         .lock()
-        .map(|cache| {
+        .map(|mut cache| {
+            prune_expired_process_details_cache(&mut cache, now_ms());
             let entries = cache.len();
             let negative_entries = cache.values().filter(|entry| entry.is_negative).count();
             (
@@ -408,6 +435,7 @@ pub fn process_details_cache_stats() -> ProcessDetailsCacheStats {
         entries,
         positive_entries,
         negative_entries,
+        max_entries: PROCESS_DETAILS_CACHE_MAX_ENTRIES,
         ttl_ms: PROCESS_DETAILS_CACHE_TTL_MS,
         negative_ttl_ms: PROCESS_DETAILS_NEGATIVE_CACHE_TTL_MS,
     }
@@ -424,11 +452,25 @@ fn now_ms() -> u64 {
 mod tests {
     use super::{
         build_inactive_window, extract_exe_name_from_process_path, has_resolved_window_process,
-        is_application_top_level_window, read_cached_process_details, resolve_process_details,
-        should_treat_shell_surface_as_inactive, should_treat_window_as_inactive,
-        write_cached_process_details,
+        is_application_top_level_window, process_details_cache, read_cached_process_details,
+        resolve_process_details, should_treat_shell_surface_as_inactive,
+        should_treat_window_as_inactive, write_cached_process_details,
+        PROCESS_DETAILS_CACHE_MAX_ENTRIES,
     };
     use windows::Win32::Foundation::HWND;
+
+    fn cache_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        static CACHE_TEST_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> =
+            std::sync::OnceLock::new();
+        CACHE_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap()
+    }
+
+    fn clear_process_details_cache_for_tests() {
+        process_details_cache().lock().unwrap().clear();
+    }
 
     #[test]
     fn inactive_window_snapshot_preserves_non_afk_idle_state() {
@@ -479,6 +521,8 @@ mod tests {
 
     #[test]
     fn process_details_cache_expires_positive_entries_after_ttl() {
+        let _guard = cache_test_guard();
+        clear_process_details_cache_for_tests();
         write_cached_process_details(
             42,
             &("App.exe".to_string(), r"C:\App\App.exe".to_string()),
@@ -491,10 +535,54 @@ mod tests {
 
     #[test]
     fn process_details_cache_expires_negative_entries_quickly() {
+        let _guard = cache_test_guard();
+        clear_process_details_cache_for_tests();
         write_cached_process_details(43, &(String::new(), String::new()), 1_000);
 
         assert!(read_cached_process_details(43, 1_500).is_some());
         assert!(read_cached_process_details(43, 2_001).is_none());
+    }
+
+    #[test]
+    fn process_details_cache_prunes_expired_entries_before_writing() {
+        let _guard = cache_test_guard();
+        clear_process_details_cache_for_tests();
+        write_cached_process_details(
+            44,
+            &("Old.exe".to_string(), r"C:\Old\Old.exe".to_string()),
+            1_000,
+        );
+        write_cached_process_details(
+            45,
+            &("New.exe".to_string(), r"C:\New\New.exe".to_string()),
+            12_001,
+        );
+
+        assert!(read_cached_process_details(44, 12_001).is_none());
+        assert!(read_cached_process_details(45, 12_001).is_some());
+    }
+
+    #[test]
+    fn process_details_cache_keeps_a_bounded_number_of_entries() {
+        let _guard = cache_test_guard();
+        clear_process_details_cache_for_tests();
+        for index in 0..(PROCESS_DETAILS_CACHE_MAX_ENTRIES + 8) {
+            write_cached_process_details(
+                1_000 + index as u32,
+                &(
+                    format!("App{index}.exe"),
+                    format!(r"C:\Apps\App{index}\App{index}.exe"),
+                ),
+                20_000 + index as u64,
+            );
+        }
+
+        assert!(read_cached_process_details(1_000, 30_000).is_none());
+        assert!(read_cached_process_details(
+            1_000 + PROCESS_DETAILS_CACHE_MAX_ENTRIES as u32 + 7,
+            30_000,
+        )
+        .is_some());
     }
 
     #[test]

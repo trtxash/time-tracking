@@ -19,7 +19,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use crate::platform::windows::handles::{MemoryDcGuard, OwnedBitmap, OwnedIcon, ScreenDcGuard};
 
-const ICON_RESULT_CACHE_MAX_ENTRIES: usize = 256;
+const ICON_RESULT_CACHE_MAX_ENTRIES: usize = 128;
 const ICON_RESULT_CACHE_TTL_MS: u64 = 10 * 60 * 1000;
 const ICON_RESULT_NEGATIVE_CACHE_TTL_MS: u64 = 60 * 1000;
 
@@ -214,23 +214,20 @@ unsafe fn hicon_to_base64(hicon: HICON) -> Option<String> {
 }
 
 fn read_icon_result_cache(cache_key: &str, now_ms: u64) -> Option<Option<String>> {
-    let cache = icon_result_cache().lock().ok()?;
+    let mut cache = icon_result_cache().lock().ok()?;
     let entry = cache.get(cache_key)?;
-    let ttl_ms = if entry.value.is_some() {
-        ICON_RESULT_CACHE_TTL_MS
-    } else {
-        ICON_RESULT_NEGATIVE_CACHE_TTL_MS
-    };
 
-    if now_ms.saturating_sub(entry.cached_at_ms) <= ttl_ms {
+    if is_icon_result_cache_entry_fresh(entry, now_ms) {
         Some(entry.value.clone())
     } else {
+        cache.remove(cache_key);
         None
     }
 }
 
 fn write_icon_result_cache(cache_key: String, value: Option<String>, now_ms: u64) {
     if let Ok(mut cache) = icon_result_cache().lock() {
+        prune_expired_icon_result_cache(&mut cache, now_ms);
         if cache.len() >= ICON_RESULT_CACHE_MAX_ENTRIES && !cache.contains_key(&cache_key) {
             if let Some(oldest_key) = cache
                 .iter()
@@ -251,6 +248,20 @@ fn write_icon_result_cache(cache_key: String, value: Option<String>, now_ms: u64
     }
 }
 
+fn is_icon_result_cache_entry_fresh(entry: &IconResultCacheEntry, now_ms: u64) -> bool {
+    let ttl_ms = if entry.value.is_some() {
+        ICON_RESULT_CACHE_TTL_MS
+    } else {
+        ICON_RESULT_NEGATIVE_CACHE_TTL_MS
+    };
+
+    now_ms.saturating_sub(entry.cached_at_ms) <= ttl_ms
+}
+
+fn prune_expired_icon_result_cache(cache: &mut HashMap<String, IconResultCacheEntry>, now_ms: u64) {
+    cache.retain(|_, entry| is_icon_result_cache_entry_fresh(entry, now_ms));
+}
+
 fn icon_result_cache() -> &'static Mutex<HashMap<String, IconResultCacheEntry>> {
     static ICON_RESULT_CACHE: OnceLock<Mutex<HashMap<String, IconResultCacheEntry>>> =
         OnceLock::new();
@@ -260,7 +271,8 @@ fn icon_result_cache() -> &'static Mutex<HashMap<String, IconResultCacheEntry>> 
 pub fn icon_result_cache_stats() -> IconResultCacheStats {
     let (entries, positive_entries, negative_entries) = icon_result_cache()
         .lock()
-        .map(|cache| {
+        .map(|mut cache| {
+            prune_expired_icon_result_cache(&mut cache, now_ms());
             let entries = cache.len();
             let positive_entries = cache.values().filter(|entry| entry.value.is_some()).count();
             (
@@ -292,6 +304,19 @@ fn now_ms() -> u64 {
 mod tests {
     use super::*;
 
+    fn cache_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        static CACHE_TEST_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> =
+            std::sync::OnceLock::new();
+        CACHE_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap()
+    }
+
+    fn clear_icon_result_cache_for_tests() {
+        icon_result_cache().lock().unwrap().clear();
+    }
+
     #[test]
     fn parse_hwnd_accepts_hex_and_decimal() {
         let hex = parse_hwnd("0x100").unwrap();
@@ -309,6 +334,8 @@ mod tests {
 
     #[test]
     fn icon_result_cache_expires_positive_entries_after_ttl() {
+        let _guard = cache_test_guard();
+        clear_icon_result_cache_for_tests();
         write_icon_result_cache("file:test.exe".to_string(), Some("icon".to_string()), 1_000);
 
         assert_eq!(
@@ -320,6 +347,8 @@ mod tests {
 
     #[test]
     fn icon_result_cache_expires_negative_entries_quickly() {
+        let _guard = cache_test_guard();
+        clear_icon_result_cache_for_tests();
         write_icon_result_cache("file:missing.exe".to_string(), None, 1_000);
 
         assert_eq!(
@@ -327,5 +356,49 @@ mod tests {
             Some(None)
         );
         assert_eq!(read_icon_result_cache("file:missing.exe", 61_001), None);
+    }
+
+    #[test]
+    fn icon_result_cache_prunes_expired_entries_before_writing() {
+        let _guard = cache_test_guard();
+        clear_icon_result_cache_for_tests();
+        write_icon_result_cache(
+            "file:old.exe".to_string(),
+            Some("old-icon".to_string()),
+            1_000,
+        );
+        write_icon_result_cache(
+            "file:new.exe".to_string(),
+            Some("new-icon".to_string()),
+            601_001,
+        );
+
+        assert_eq!(read_icon_result_cache("file:old.exe", 601_001), None);
+        assert_eq!(
+            read_icon_result_cache("file:new.exe", 601_001),
+            Some(Some("new-icon".to_string()))
+        );
+    }
+
+    #[test]
+    fn icon_result_cache_keeps_a_bounded_number_of_entries() {
+        let _guard = cache_test_guard();
+        clear_icon_result_cache_for_tests();
+        for index in 0..(ICON_RESULT_CACHE_MAX_ENTRIES + 8) {
+            write_icon_result_cache(
+                format!("file:app-{index}.exe"),
+                Some(format!("icon-{index}")),
+                700_000 + index as u64,
+            );
+        }
+
+        assert_eq!(read_icon_result_cache("file:app-0.exe", 700_500), None);
+        assert_eq!(
+            read_icon_result_cache(
+                &format!("file:app-{}.exe", ICON_RESULT_CACHE_MAX_ENTRIES + 7),
+                700_500,
+            ),
+            Some(Some(format!("icon-{}", ICON_RESULT_CACHE_MAX_ENTRIES + 7)))
+        );
     }
 }

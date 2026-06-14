@@ -3,6 +3,7 @@ use serde::Serialize;
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
 };
+use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX};
 use windows::Win32::System::Threading::{
     GetCurrentProcess, GetCurrentProcessId, GetProcessHandleCount,
 };
@@ -11,12 +12,18 @@ use windows::Win32::System::Threading::{
 pub struct WindowsProcessResourceSnapshot {
     pub handle_count: Option<u32>,
     pub thread_count: Option<u32>,
+    pub working_set_bytes: Option<usize>,
+    pub private_usage_bytes: Option<usize>,
 }
 
 pub fn current_process_resource_snapshot() -> WindowsProcessResourceSnapshot {
+    let memory = current_process_memory_counters();
+
     WindowsProcessResourceSnapshot {
         handle_count: current_process_handle_count(),
         thread_count: current_process_thread_count(),
+        working_set_bytes: memory.map(|counters| counters.WorkingSetSize),
+        private_usage_bytes: memory.map(|counters| counters.PrivateUsage),
     }
 }
 
@@ -55,4 +62,22 @@ fn current_process_thread_count() -> Option<u32> {
     }
 
     Some(count)
+}
+
+fn current_process_memory_counters() -> Option<PROCESS_MEMORY_COUNTERS_EX> {
+    let mut counters = PROCESS_MEMORY_COUNTERS_EX {
+        cb: std::mem::size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32,
+        ..Default::default()
+    };
+
+    unsafe {
+        GetProcessMemoryInfo(
+            GetCurrentProcess(),
+            &mut counters as *mut PROCESS_MEMORY_COUNTERS_EX as *mut _,
+            counters.cb,
+        )
+        .ok()?;
+    }
+
+    Some(counters)
 }

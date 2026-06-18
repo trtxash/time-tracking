@@ -366,17 +366,41 @@ await runTest("operation-oriented pages keep explicit busy feedback", () => {
 });
 
 await runTest("settings leaves web activity connection status to the extension", () => {
-  const extensionBackground = readUtf8("extensions/chrome/background.js");
+  const extensionBackground = readUtf8("extensions/chromium/background.js");
   const webActivityDomain = readUtf8("src-tauri/src/domain/web_activity.rs");
   const bridgeGateway = readUtf8("src/platform/runtime/webActivityBridgeGateway.ts");
   const settingsInterface = readUtf8("src/features/settings/components/SettingsInterfacePanel.tsx");
-  const extensionPopup = readUtf8("extensions/chrome/popup.js");
+  const extensionPopup = readUtf8("extensions/chromium/popup.js");
 
   assert.doesNotMatch(extensionBackground, /statusLabel|extensionStatusLabel/);
   assert.doesNotMatch(webActivityDomain, /status_label|sanitize_status_label/);
   assert.doesNotMatch(bridgeGateway, /statusLabel/);
   assert.doesNotMatch(settingsInterface, /bridgeSnapshot|formatBridgeStatus|webActivityStatus/);
-  assert.match(extensionPopup, /function statusLabel\(settings\)/);
+  assert.match(extensionPopup, /function statusView\(settings,\s*text\)/);
+});
+
+await runTest("web activity views are gated by saved web sync setting", () => {
+  const shell = readUtf8("src/app/AppShell.tsx");
+  const history = readUtf8("src/features/history/components/History.tsx");
+  const mapping = readUtf8("src/features/classification/components/AppMapping.tsx");
+  const mappingState = readUtf8("src/features/classification/hooks/useAppMappingState.ts");
+  const historyBranch = shell.slice(shell.indexOf("<History"), shell.indexOf("<Data"));
+  const mappingBranch = shell.slice(shell.indexOf("<AppMapping"), shell.indexOf("</Suspense>"));
+
+  assert.match(historyBranch, /webActivityEnabled=\{appSettings\.webActivityEnabled\}/);
+  assert.match(mappingBranch, /webActivityEnabled=\{appSettings\.webActivityEnabled\}/);
+  assert.match(history, /webActivityEnabled = false/);
+  assert.match(history, /const effectiveDayDistributionMode = webActivityEnabled \? dayDistributionMode : "app"/);
+  assert.match(history, /const effectiveTimelineDialogMode = webActivityEnabled \? timelineDialogMode : "app"/);
+  assert.match(history, /webActivityEnabled && \(/);
+  assert.match(history, /if \(!webActivityEnabled\) return \[\]/);
+  assert.match(mapping, /const \{ webActivityEnabled = false \} = props/);
+  assert.match(mapping, /const effectiveObjectMode = webActivityEnabled \? objectMode : "app"/);
+  assert.match(mapping, /webActivityEnabled && \(/);
+  assert.match(mappingState, /webActivityEnabled = false/);
+  assert.match(mappingState, /if \(!webActivityEnabled\) return \{\}/);
+  assert.match(mappingState, /if \(!webActivityEnabled\) return \[\]/);
+  assert.match(mappingState, /if \(!webActivityEnabled\) return \{ all: 0, other: 0, classified: 0 \}/);
 });
 
 await runTest("classification web domain colors prefer favicon theme colors", () => {

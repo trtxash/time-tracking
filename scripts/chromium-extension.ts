@@ -3,28 +3,36 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
-const SOURCE_DIR = join(REPO_ROOT, "extensions", "chrome");
-const BUILD_DIR = join(REPO_ROOT, "dist", "extensions", "chrome", "unpacked");
-const PACKAGE_FILE = join(REPO_ROOT, "dist", "extensions", "chrome", "patina-chrome-extension.zip");
+const SOURCE_DIR = join(REPO_ROOT, "extensions", "chromium");
+const BUILD_DIR = join(REPO_ROOT, "dist", "extensions", "chromium", "unpacked");
+const PACKAGE_DIR = join(REPO_ROOT, "dist", "extensions", "chromium");
 const REQUIRED_ICON_FILES = {
   "32": "icons/icon-32.png",
   "64": "icons/icon-64.png",
   "128": "icons/icon-128.png",
 } as const;
-const REQUIRED_FILES = [
+const EXTENSION_FILES = [
   "manifest.json",
   "background.js",
   "options.html",
   "options.js",
   "popup.html",
   "popup.js",
-  "README.md",
   ...Object.values(REQUIRED_ICON_FILES),
+] as const;
+const USER_GUIDE_FILES = [
+  "README.en.md",
+  "README.zh-CN.md",
+] as const;
+const REQUIRED_FILES = [
+  ...EXTENSION_FILES,
+  ...USER_GUIDE_FILES,
 ] as const;
 
 type ChromeManifest = {
   manifest_version?: number;
   name?: string;
+  version?: string;
   background?: {
     service_worker?: string;
   };
@@ -51,13 +59,44 @@ async function readManifest() {
   try {
     raw = await readFile(join(SOURCE_DIR, "manifest.json"), "utf8");
   } catch {
-    fail("Chrome extension check failed. Missing extensions/chrome/manifest.json.");
+    fail("Chromium extension check failed. Missing extensions/chromium/manifest.json.");
   }
 
   try {
     return JSON.parse(raw) as ChromeManifest;
   } catch (error) {
-    fail(`Chrome extension check failed. manifest.json is invalid JSON: ${String(error)}`);
+    fail(`Chromium extension check failed. manifest.json is invalid JSON: ${String(error)}`);
+  }
+}
+
+function getExtensionVersion(manifest: ChromeManifest) {
+  const version = manifest.version?.trim();
+  if (!version) {
+    fail("Chromium extension check failed. manifest version is required.");
+  }
+  return version;
+}
+
+function getPackageFile(version: string) {
+  return join(PACKAGE_DIR, `patina-chromium-extension-v${version}.zip`);
+}
+
+function getPackageRootName(version: string) {
+  return `patina-chromium-extension-v${version}`;
+}
+
+async function cleanExistingPackages() {
+  let entries: string[] = [];
+  try {
+    entries = await readdir(PACKAGE_DIR);
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    if (entry === "patina-chromium-extension.zip" || /^patina-chromium-extension-v.+\.zip$/.test(entry)) {
+      await rm(join(PACKAGE_DIR, entry), { force: true });
+    }
   }
 }
 
@@ -66,10 +105,10 @@ async function ensureFile(relativePath: string) {
   try {
     const fileStat = await stat(filePath);
     if (!fileStat.isFile()) {
-      fail(`Chrome extension check failed. Expected file: ${relativePath}`);
+      fail(`Chromium extension check failed. Expected file: ${relativePath}`);
     }
   } catch {
-    fail(`Chrome extension check failed. Missing file: ${relativePath}`);
+    fail(`Chromium extension check failed. Missing file: ${relativePath}`);
   }
 }
 
@@ -85,24 +124,25 @@ async function checkExtension() {
   const csp = manifest.content_security_policy?.extension_pages ?? "";
 
   if (manifest.manifest_version !== 3) {
-    fail("Chrome extension check failed. manifest_version must be 3.");
+    fail("Chromium extension check failed. manifest_version must be 3.");
   }
   if (!manifest.name?.trim()) {
-    fail("Chrome extension check failed. manifest name is required.");
+    fail("Chromium extension check failed. manifest name is required.");
   }
+  getExtensionVersion(manifest);
   if (manifest.background?.service_worker !== "background.js") {
-    fail("Chrome extension check failed. background.service_worker must be background.js.");
+    fail("Chromium extension check failed. background.service_worker must be background.js.");
   }
   for (const permission of ["alarms", "favicon", "storage", "tabs"]) {
     if (!permissions.has(permission)) {
-      fail(`Chrome extension check failed. Missing permission: ${permission}.`);
+      fail(`Chromium extension check failed. Missing permission: ${permission}.`);
     }
   }
   if (!hostPermissions.includes("http://127.0.0.1/*") || !hostPermissions.includes("http://localhost/*")) {
-    fail("Chrome extension check failed. Host permissions must stay limited to local Patina addresses.");
+    fail("Chromium extension check failed. Host permissions must stay limited to local Patina addresses.");
   }
   if (!csp.includes("http://127.0.0.1:*") || !csp.includes("http://localhost:*")) {
-    fail("Chrome extension check failed. CSP must allow local HTTP bridge addresses.");
+    fail("Chromium extension check failed. CSP must allow local HTTP bridge addresses.");
   }
   const cspWithoutLocalHttp = csp
     .replaceAll("http://127.0.0.1:*", "")
@@ -113,39 +153,39 @@ async function checkExtension() {
     || cspWithoutLocalHttp.includes("ws:")
     || cspWithoutLocalHttp.includes("wss:")
   ) {
-    fail("Chrome extension check failed. CSP must not allow remote fetches; favicons should come from Chrome's local favicon cache.");
+    fail("Chromium extension check failed. CSP must not allow remote fetches; favicons should come from the browser's local favicon cache.");
   }
   if (!background.includes("/_favicon/") || !background.includes("chromeCachedFaviconUrl")) {
-    fail("Chrome extension check failed. Background worker must use Chrome's local favicon cache.");
+    fail("Chromium extension check failed. Background worker must use the browser's local favicon cache.");
   }
   for (const [size, iconFile] of Object.entries(REQUIRED_ICON_FILES)) {
     if (manifest.icons?.[size] !== iconFile) {
-      fail(`Chrome extension check failed. Missing extension icon ${size}: ${iconFile}.`);
+      fail(`Chromium extension check failed. Missing extension icon ${size}: ${iconFile}.`);
     }
     if (manifest.action?.default_icon?.[size] !== iconFile) {
-      fail(`Chrome extension check failed. Missing action icon ${size}: ${iconFile}.`);
+      fail(`Chromium extension check failed. Missing action icon ${size}: ${iconFile}.`);
     }
   }
   if (manifest.options_page !== "options.html") {
-    fail("Chrome extension check failed. options_page must be options.html.");
+    fail("Chromium extension check failed. options_page must be options.html.");
   }
   if (manifest.action?.default_popup !== "popup.html") {
-    fail("Chrome extension check failed. action.default_popup must be popup.html.");
+    fail("Chromium extension check failed. action.default_popup must be popup.html.");
   }
 
-  console.log("Chrome extension check passed.");
+  console.log("Chromium extension check passed.");
 }
 
 async function buildExtension() {
   await checkExtension();
   await rm(BUILD_DIR, { force: true, recursive: true });
   await mkdir(BUILD_DIR, { recursive: true });
-  for (const file of REQUIRED_FILES) {
+  for (const file of EXTENSION_FILES) {
     const outputFile = join(BUILD_DIR, file);
     await mkdir(dirname(outputFile), { recursive: true });
     await cp(join(SOURCE_DIR, file), outputFile);
   }
-  console.log(`Chrome extension unpacked build written to ${relative(REPO_ROOT, BUILD_DIR)}.`);
+  console.log(`Chromium extension unpacked build written to ${relative(REPO_ROOT, BUILD_DIR)}.`);
 }
 
 function makeCrcTable() {
@@ -237,15 +277,19 @@ function writeEndRecord(fileCount: number, centralSize: number, centralOffset: n
   return record;
 }
 
-async function createZipFromDirectory(sourceDir: string, outputFile: string) {
-  const files = await listFiles(sourceDir);
+type ZipEntry = {
+  sourcePath: string;
+  archivePath: string;
+};
+
+async function createZipFromEntries(entries: ZipEntry[], outputFile: string) {
   const localParts: Buffer[] = [];
   const centralParts: Buffer[] = [];
   let offset = 0;
 
-  for (const file of files) {
-    const name = Buffer.from(file, "utf8");
-    const data = await readFile(join(sourceDir, file));
+  for (const entry of entries) {
+    const name = Buffer.from(entry.archivePath, "utf8");
+    const data = await readFile(entry.sourcePath);
     const crc = crc32(data);
     const localHeader = writeLocalHeader(name, data, crc);
     localParts.push(localHeader);
@@ -254,16 +298,31 @@ async function createZipFromDirectory(sourceDir: string, outputFile: string) {
   }
 
   const centralDirectory = Buffer.concat(centralParts);
-  const endRecord = writeEndRecord(files.length, centralDirectory.length, offset);
+  const endRecord = writeEndRecord(entries.length, centralDirectory.length, offset);
   await mkdir(dirname(outputFile), { recursive: true });
   await writeFile(outputFile, Buffer.concat([...localParts, centralDirectory, endRecord]));
 }
 
 async function packageExtension() {
   await buildExtension();
-  await rm(PACKAGE_FILE, { force: true });
-  await createZipFromDirectory(BUILD_DIR, PACKAGE_FILE);
-  console.log(`Chrome extension package written to ${relative(REPO_ROOT, PACKAGE_FILE)}.`);
+  const manifest = await readManifest();
+  const version = getExtensionVersion(manifest);
+  const packageFile = getPackageFile(version);
+  const packageRootName = getPackageRootName(version);
+  const extensionFiles = await listFiles(BUILD_DIR);
+  const zipEntries: ZipEntry[] = [
+    ...extensionFiles.map((file) => ({
+      sourcePath: join(BUILD_DIR, file),
+      archivePath: `${packageRootName}/${file}`,
+    })),
+    ...USER_GUIDE_FILES.map((file) => ({
+      sourcePath: join(SOURCE_DIR, file),
+      archivePath: file,
+    })),
+  ];
+  await cleanExistingPackages();
+  await createZipFromEntries(zipEntries, packageFile);
+  console.log(`Chromium extension package written to ${relative(REPO_ROOT, packageFile)}.`);
 }
 
 const command = process.argv[2] ?? "check";
@@ -275,5 +334,5 @@ if (command === "check") {
 } else if (command === "package") {
   await packageExtension();
 } else {
-  fail(`Unknown chrome extension command: ${command}`);
+  fail(`Unknown Chromium extension command: ${command}`);
 }

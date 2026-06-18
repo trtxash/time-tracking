@@ -6,7 +6,7 @@ const FAVICON_DATA_URL_MAX_CHARS = 8192;
 const FAVICON_DATA_URL_MAX_BYTES = 6144;
 const FAVICON_CACHE_LIMIT = 128;
 const STORAGE_DEFAULTS = {
-  enabled: false,
+  enabled: true,
   port: DEFAULT_PORT,
   token: "",
   clientId: "",
@@ -38,9 +38,16 @@ function setStatus(lastStatus, lastMessage = "") {
 async function getSettings() {
   const settings = await chrome.storage.local.get(STORAGE_DEFAULTS);
   let clientId = String(settings.clientId || "").trim();
+  const storagePatch = {};
   if (!clientId) {
     clientId = crypto.randomUUID();
-    await chrome.storage.local.set({ clientId });
+    storagePatch.clientId = clientId;
+  }
+  if (settings.enabled !== true) {
+    storagePatch.enabled = true;
+  }
+  if (Object.keys(storagePatch).length > 0) {
+    await chrome.storage.local.set(storagePatch);
   }
   const port = normalizePort(settings.port);
   return {
@@ -49,7 +56,7 @@ async function getSettings() {
     clientId,
     port,
     token: String(settings.token || "").trim(),
-    enabled: Boolean(settings.enabled),
+    enabled: true,
   };
 }
 
@@ -150,13 +157,13 @@ async function sendActiveTab(eventReason = "refresh") {
     return;
   }
   if (!settings.port || !settings.token) {
-    await setStatus("needs-config", "缺少 Patina 端口或 Token。");
+    await setStatus("needs-config", "请填写端口和 Token。");
     return;
   }
 
   const tab = await getActiveTrackableTab(eventReason);
   if (!tab) {
-    await setStatus("disconnected", "当前没有可同步网页。");
+    await setStatus("disconnected", "当前没有可同步的网页。");
     return;
   }
 
@@ -189,16 +196,16 @@ async function sendActiveTab(eventReason = "refresh") {
     });
     const data = await response.json().catch(() => null);
     if (data?.enabled === false) {
-      await setStatus("disabled", "Patina 网页记录已关闭。");
+      await setStatus("disabled", "Patina 网页同步未开启。");
       return;
     }
     if (!response.ok || data?.ok === false) {
-      await setStatus("error", data?.message || `Patina 请求失败（${response.status}）。`);
+      await setStatus("error", data?.message || "");
       return;
     }
     await setStatus("connected");
   } catch {
-    await setStatus("error", "无法同步到 Patina。");
+    await setStatus("error");
   }
 }
 
@@ -234,6 +241,16 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name !== "patina-active-tab-sync") return;
   queueActiveTab("periodic");
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local") return;
+  if (changes.enabled?.newValue === true) {
+    queueActiveTab("settings-enabled");
+  }
+  if (changes.enabled?.newValue === false) {
+    void setStatus("disabled");
+  }
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

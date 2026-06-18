@@ -96,6 +96,7 @@ export interface UseAppMappingStateOptions {
   onOverridesChanged?: () => void;
   onSessionsDeleted?: () => void;
   onRegisterSaveHandler?: (handler: (() => Promise<boolean>) | null) => void;
+  webActivityEnabled?: boolean;
 }
 
 export function useAppMappingState({
@@ -104,6 +105,7 @@ export function useAppMappingState({
   onOverridesChanged,
   onSessionsDeleted,
   onRegisterSaveHandler,
+  webActivityEnabled = false,
 }: UseAppMappingStateOptions) {
   const { confirm, prompt, dialogs } = useQuietDialogs();
   const initialBootstrap = getClassificationBootstrapCache();
@@ -136,6 +138,8 @@ export function useAppMappingState({
   const [colorFormat, setColorFormat] = useState<ColorDisplayFormat>("hex");
   const iconThemeColors = useIconThemeColors(icons);
   const webDomainIcons = useMemo(() => {
+    if (!webActivityEnabled) return {};
+
     const next: Record<string, string> = {};
     for (const candidate of webDomainCandidates) {
       const faviconUrl = candidate.faviconUrl?.trim();
@@ -144,7 +148,7 @@ export function useAppMappingState({
       }
     }
     return next;
-  }, [webDomainCandidates]);
+  }, [webActivityEnabled, webDomainCandidates]);
   const webDomainIconThemeColors = useIconThemeColors(webDomainIcons);
   const skipNextNameBlurExeRef = useRef<string | null>(null);
   const skipNextWebNameBlurDomainRef = useRef<string | null>(null);
@@ -345,6 +349,8 @@ export function useAppMappingState({
   }, [candidates, resolveMappedCategory]);
 
   const filteredWebDomainCandidates = useMemo(() => {
+    if (!webActivityEnabled) return [];
+
     const normalizedQuery = searchQuery.trim().toLocaleLowerCase(getUiTextLanguage());
     return webDomainCandidates
       .filter((candidate) => {
@@ -379,15 +385,18 @@ export function useAppMappingState({
     searchQuery,
     resolveWebDomainCategory,
     resolveWebDomainSortDisplayName,
+    webActivityEnabled,
     webDomainCandidates,
   ]);
 
   const webDomainCounts = useMemo(() => {
+    if (!webActivityEnabled) return { all: 0, other: 0, classified: 0 };
+
     const all = webDomainCandidates.length;
     const other = webDomainCandidates.filter((candidate) => resolveWebDomainCategory(candidate) === "other").length;
     const classified = Math.max(0, all - other);
     return { all, other, classified };
-  }, [resolveWebDomainCategory, webDomainCandidates]);
+  }, [resolveWebDomainCategory, webActivityEnabled, webDomainCandidates]);
 
   const customCategoryOptions = useMemo(() => {
     const deletedSet = new Set(draftDeletedCategories);

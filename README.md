@@ -33,6 +33,8 @@ Prebuilt versions are published on GitHub Releases:
 
 If you just want to use the app, open the latest release page and download the `.exe` installer.
 
+For browser webpage sync, the release also includes the Patina Web Sync extension, with usage instructions inside the extension package.
+
 ## Why Patina
 
 - Automatic foreground app tracking without manually maintaining the main time record.

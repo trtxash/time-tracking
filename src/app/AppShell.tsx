@@ -453,6 +453,7 @@ function AppShellContent() {
                   hourlyActivityChartMode={appSettings.hourlyActivityChartMode}
                   onHourlyActivityChartModeChange={handleHourlyActivityChartModeChange}
                   refreshEnabled={isHistoryRefreshEnabled}
+                  webActivityEnabled={appSettings.webActivityEnabled}
                 />
               )}
               {currentView === "data" && (
@@ -530,6 +531,7 @@ function AppShellContent() {
                     setReadModelRefreshState(applySessionDeletionReadModelRefresh);
                     pushToast(uiText.app.historyDeleted, "success");
                   }}
+                  webActivityEnabled={appSettings.webActivityEnabled}
                 />
               )}
           </Suspense>

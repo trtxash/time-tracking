@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RefreshCw, Save, Search, Sparkles, SlidersHorizontal } from "lucide-react";
 import { UI_TEXT } from "../../../shared/copy/uiText.ts";
 import QuietDialog from "../../../shared/components/QuietDialog";
@@ -21,9 +21,11 @@ interface Props {
   onOverridesChanged?: () => void;
   onSessionsDeleted?: () => void;
   onRegisterSaveHandler?: (handler: (() => Promise<boolean>) | null) => void;
+  webActivityEnabled?: boolean;
 }
 
 export default function AppMapping(props: Props) {
+  const { webActivityEnabled = false } = props;
   const [objectMode, setObjectMode] = useState<MappingObjectMode>(readClassificationObjectMode);
   const filterOptions: Array<{ value: CandidateFilter; label: string }> = [
     { value: "all", label: UI_TEXT.mapping.filters.all },
@@ -92,6 +94,12 @@ export default function AppMapping(props: Props) {
     applyCategoryColor,
   } = useAppMappingState(props);
 
+  useEffect(() => {
+    if (webActivityEnabled || objectMode !== "web") return;
+
+    setObjectMode("app");
+  }, [objectMode, webActivityEnabled]);
+
   if (loading || !draftState || !savedState) {
     return (
       <div className="h-full flex items-center justify-center gap-2 text-[var(--qp-text-tertiary)]">
@@ -101,12 +109,13 @@ export default function AppMapping(props: Props) {
     );
   }
 
-  const activeCounts = objectMode === "web" ? webDomainCounts : counts;
+  const effectiveObjectMode = webActivityEnabled ? objectMode : "app";
+  const activeCounts = effectiveObjectMode === "web" ? webDomainCounts : counts;
   const objectModeOptions = [
     { value: "app" as const, label: UI_TEXT.mapping.objectModeApp },
     { value: "web" as const, label: UI_TEXT.mapping.objectModeWeb },
   ];
-  const searchPlaceholder = objectMode === "web"
+  const searchPlaceholder = effectiveObjectMode === "web"
     ? UI_TEXT.mapping.webSearchPlaceholder
     : UI_TEXT.mapping.appSearchPlaceholder;
   const handleObjectModeChange = (mode: MappingObjectMode) => {
@@ -193,12 +202,14 @@ export default function AppMapping(props: Props) {
             </label>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <QuietSegmentedFilter
-              value={objectMode}
-              onChange={handleObjectModeChange}
-              options={objectModeOptions}
-              className="qp-segmented-filter-compact"
-            />
+            {webActivityEnabled && (
+              <QuietSegmentedFilter
+                value={effectiveObjectMode}
+                onChange={handleObjectModeChange}
+                options={objectModeOptions}
+                className="qp-segmented-filter-compact"
+              />
+            )}
             <button
               type="button"
               onClick={() => setShowCategoryDialog(true)}
@@ -212,7 +223,7 @@ export default function AppMapping(props: Props) {
       </section>
 
       <div className="qp-panel flex-1 min-h-0 p-4">
-        {objectMode === "web" ? (
+        {effectiveObjectMode === "web" ? (
           filteredWebDomainCandidates.length === 0 ? (
             <div className="h-full flex items-center justify-center text-sm text-[var(--qp-text-tertiary)]">
               {UI_TEXT.mapping.webEmptyState}

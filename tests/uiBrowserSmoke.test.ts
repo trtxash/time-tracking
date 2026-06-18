@@ -94,6 +94,8 @@ function tauriStubFor(path: string) {
           return {
             "__app_override::cursor.exe": JSON.stringify({ category: "development", enabled: true }),
             "__app_override::deep-research-workbench.exe": JSON.stringify({ category: "office", enabled: true }),
+            "web_activity_enabled": "1",
+            "web_activity_token": "smoke-token",
             ...JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) ?? "{}"),
           };
         } catch {
@@ -150,6 +152,8 @@ function tauriStubFor(path: string) {
           return {
             "__app_override::cursor.exe": JSON.stringify({ category: "development", enabled: true }),
             "__app_override::deep-research-workbench.exe": JSON.stringify({ category: "office", enabled: true }),
+            "web_activity_enabled": "1",
+            "web_activity_token": "smoke-token",
             ...JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) ?? "{}"),
           };
         } catch {

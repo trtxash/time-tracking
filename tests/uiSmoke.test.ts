@@ -379,6 +379,18 @@ await runTest("settings leaves web activity connection status to the extension",
   assert.match(extensionPopup, /function statusView\(settings,\s*text\)/);
 });
 
+await runTest("settings exposes local status access controls", () => {
+  const settings = readUtf8("src/features/settings/components/Settings.tsx");
+  const settingsInterface = readUtf8("src/features/settings/components/SettingsInterfacePanel.tsx");
+
+  assert.match(settings, /localApiEnabled=\{draftSettings\.localApiEnabled\}/);
+  assert.match(settings, /localApiToken=\{draftSettings\.localApiToken\}/);
+  assert.match(settingsInterface, /UI_TEXT\.settings\.localApiGeneralTitle/);
+  assert.match(settingsInterface, /UI_TEXT\.accessibility\.settings\.toggleLocalApi/);
+  assert.match(settingsInterface, /buildLocalApiEnabledChange/);
+  assert.match(settingsInterface, /LOCAL_API_ENDPOINT_PREFIX = "ws:\/\/127\.0\.0\.1:"/);
+});
+
 await runTest("web activity views are gated by saved web sync setting", () => {
   const shell = readUtf8("src/app/AppShell.tsx");
   const history = readUtf8("src/features/history/components/History.tsx");

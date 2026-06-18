@@ -76,7 +76,8 @@ jobs:
             Write-Host "Release was triggered by pushed tag $tag."
           }
 
-          git fetch --force origin "refs/tags/$tag:refs/tags/$tag"
+          $tagRef = "refs/tags/$tag"
+          git fetch --force origin "${tagRef}:${tagRef}"
           if ($LASTEXITCODE -ne 0) {
             throw "Failed to fetch $tag from origin."
           }

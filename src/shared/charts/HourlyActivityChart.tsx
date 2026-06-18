@@ -140,7 +140,7 @@ export default function HourlyActivityChart({
   }, [chartData, margin.bottom]);
 
   return (
-    <div ref={chartRef} className="h-full w-full">
+    <div ref={chartRef} className="h-full w-full" data-hourly-activity-chart-mode={mode}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} margin={margin}>
         <XAxis

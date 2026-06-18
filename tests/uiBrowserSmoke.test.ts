@@ -1578,15 +1578,17 @@ try {
     await waitForExpression(
       client!,
       sessionId,
-      `document.querySelectorAll(".dashboard-pulse-chart .recharts-bar").length >= 2`,
+      `document.querySelector(".dashboard-pulse-chart [data-hourly-activity-chart-mode]")
+        ?.getAttribute("data-hourly-activity-chart-mode") === "category"`,
     );
     assert.equal(
       await evaluate(
         client!,
         sessionId,
-        `document.querySelectorAll(".dashboard-pulse-chart .recharts-bar").length >= 2`,
+        `document.querySelector(".dashboard-pulse-chart [data-hourly-activity-chart-mode]")
+          ?.getAttribute("data-hourly-activity-chart-mode")`,
       ),
-      true,
+      "category",
     );
     assert.equal(
       await evaluate(client!, sessionId, `
@@ -1940,15 +1942,17 @@ try {
     await waitForExpression(
       client!,
       sessionId,
-      `document.querySelectorAll(".history-pulse-chart .recharts-bar").length >= 2`,
+      `document.querySelector(".history-pulse-chart [data-hourly-activity-chart-mode]")
+        ?.getAttribute("data-hourly-activity-chart-mode") === "category"`,
     );
     assert.equal(
       await evaluate(
         client!,
         sessionId,
-        `document.querySelectorAll(".history-pulse-chart .recharts-bar").length >= 2`,
+        `document.querySelector(".history-pulse-chart [data-hourly-activity-chart-mode]")
+          ?.getAttribute("data-hourly-activity-chart-mode")`,
       ),
-      true,
+      "category",
     );
   });
 

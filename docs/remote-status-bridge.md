@@ -2,7 +2,7 @@
 
 本仓库提供一键部署至 Cloudflare Worker 的示例模板，帮助用户快速搭建**无需服务器**的远端状态桥接服务：
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Ceceliaee/patina/tree/main/workers/remote-status-bridge)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Ceceliaee/patina/tree/main/docs/examples/remote-status-bridge-worker)
 
 快速部署：
 
@@ -10,7 +10,7 @@
 2. 在 Worker 中把 `REMOTE_STATUS_BRIDGE_TOKEN` 改成自己的连接令牌。
 3. 在 Patina 设置页填写 `wss://<your-worker-host>/ws` 和相同的连接令牌。
 
-示例 Worker 位于 `workers/remote-status-bridge`。默认只用内存保存当前状态，不接 `D1` 或 `KV`。
+示例 Worker 位于 `docs/examples/remote-status-bridge-worker`。默认只用内存保存当前状态，不接 `D1` 或 `KV`。
 
 ## 1. 功能定位
 
